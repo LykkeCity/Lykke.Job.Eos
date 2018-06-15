@@ -1,0 +1,22 @@
+{
+  "name": "lykke.job.eos",
+  "version": "1.0.0",
+  "description": "Lykke adapter to EOS.IO blockchain, periodical tasks",
+  "main": "./build/server.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "author": "Lykke",
+  "license": "ISC",
+  "dependencies": {
+    "axios": "^0.18.0",
+    "azure-storage": "^2.8.3",
+    "eosjs": "^14.1.1",
+    "interval-promise": "^1.2.0",
+    "koa": "^2.5.1"
+  },
+  "devDependencies": {
+    "@types/koa": "^2.0.46",
+    "@types/node": "^10.3.3"
+  }
+}
