@@ -1,7 +1,6 @@
-import { createTableService, TableService, TableQuery, TableUtilities } from "azure-storage";
+import { createTableService, TableService, TableUtilities } from "azure-storage";
 import { Settings } from "../common";
-import { QueryResult, select, ensureTable } from "./queries";
-import { isString } from "util";
+import { select, ensureTable } from "./queries";
 
 export interface Params {
     nextActionSequence: number;
@@ -36,7 +35,7 @@ export class ParamsRepository {
         return ensureTable(this.table, this.tableName)
             .then(() => {
                 return new Promise<any>((res, rej) => {
-                    let entity = {
+                    const entity = {
                         PartitionKey: TableUtilities.entityGenerator.String(this.partitionKey),
                         RowKey: TableUtilities.entityGenerator.String(this.rowKey),
                         NextActionSequence: TableUtilities.entityGenerator.Int64(nextActionSequence)

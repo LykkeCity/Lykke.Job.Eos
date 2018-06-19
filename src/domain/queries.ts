@@ -1,6 +1,7 @@
-import { TableService, TableQuery } from "azure-storage";
+import { TableService, TableQuery, TableUtilities } from "azure-storage";
 import { fromBase64, toBase64 } from "../common";
 import { isString } from "util";
+import { AssertionError } from "assert";
 
 export class QueryResult<T> {
 
@@ -33,15 +34,34 @@ export async function ensureTable(table: TableService, tableName: string): Promi
     });
 }
 
-export async function select(table: TableService, tableName: string, partitionKey: string, rowKey: string): Promise<any>;
+export async function remove(table: TableService, tableName: string, partitionKey: string, rowKey: string): Promise<void> {
+    return ensureTable(table, tableName)
+        .then(() => {
+            return new Promise<any | QueryResult<any>>((res, rej) => {
+                const entity = {
+                    PartitionKey: TableUtilities.entityGenerator.String(partitionKey),
+                    RowKey: TableUtilities.entityGenerator.String(rowKey)
+                };
+                table.deleteEntity(tableName, entity, err => {
+                    if (err) {
+                        rej(err);
+                    } else {
+                        res();
+                    }
+                })
+            });
+        });
+}
+
+export async function select(table: TableService, tableName: string, partitionKey: string, rowKey: string, throwIfNotFound?: boolean): Promise<any>;
 export async function select(table: TableService, tableName: string, query: TableQuery, continuationToken: TableService.TableContinuationToken): Promise<TableService.QueryEntitiesResult<any>>;
-export async function select(table: TableService, tableName: string, partitionKeyOrQuery: string | TableQuery, rowKeyOrContinuationToken: string | TableService.TableContinuationToken): Promise<any | TableService.QueryEntitiesResult<any>> {
+export async function select(table: TableService, tableName: string, partitionKeyOrQuery: string | TableQuery, rowKeyOrContinuationToken: string | TableService.TableContinuationToken, throwIfNotFound = false): Promise<any | TableService.QueryEntitiesResult<any>> {
     return ensureTable(table, tableName)
         .then(() => {
             return new Promise<any | QueryResult<any>>((res, rej) => {
                 if (isString(partitionKeyOrQuery)) {
                     table.retrieveEntity(tableName, partitionKeyOrQuery, rowKeyOrContinuationToken as string, (err, result, response) => {
-                        if (err && response.statusCode != 404) {
+                        if (err && (response.statusCode != 404 || !!throwIfNotFound)) {
                             rej(err);
                         } else {
                             res(result);
@@ -58,4 +78,17 @@ export async function select(table: TableService, tableName: string, partitionKe
                 }
             });
         });
+}
+
+export async function all<T>(query: (take: number, continuation?: string) => Promise<QueryResult<T>>): Promise<T[]> {
+    let continuation: string = null;
+    let items: T[] = [];
+
+    do {
+        let res = await this.get(100, continuation);
+        continuation = res.continuation;
+        items = items.concat(res.items);
+    } while (!!continuation)
+
+    return items;
 }

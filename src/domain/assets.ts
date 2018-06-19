@@ -1,6 +1,6 @@
 import { createTableService, TableService, TableQuery, TableUtilities } from "azure-storage";
 import { Settings } from "../common";
-import { QueryResult, select, toAzure } from "./queries";
+import { QueryResult, select, toAzure, all } from "./queries";
 import { isString } from "util";
 
 export interface Asset {
@@ -33,12 +33,16 @@ export class AssetRepository {
     }
 
     async get(id: string): Promise<Asset>;
-    async get(take: number, continuation?: string): Promise<Asset[]>;
-    async get(idOrTake: string | number, continuation?: string): Promise<Asset | Asset[]> {
+    async get(take: number, continuation?: string): Promise<QueryResult<Asset>>;
+    async get(idOrTake: string | number, continuation?: string): Promise<Asset | QueryResult<Asset>> {
         if (isString(idOrTake)) {
             return this.map(await select(this.table, this.tableName, idOrTake, ""));
         } else {
-            return new QueryResult(await select(this.table, this.tableName, new TableQuery().top(idOrTake || 100), toAzure(continuation)), this.map).items;
+            return new QueryResult(await select(this.table, this.tableName, new TableQuery().top(idOrTake || 100), toAzure(continuation)), this.map);
         }
+    }
+
+    async all(): Promise<Asset[]> {
+        return await all<Asset>(this.get);
     }
 }

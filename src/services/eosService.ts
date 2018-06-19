@@ -1,9 +1,10 @@
-import { promisify } from "util";
-import { Asset } from "../domain/assets";
-import { OperationItem } from "../domain/operations";
 import { Settings, ADDRESS_SEPARATOR } from "../common";
 import { LogService } from "./logService";
+import { AssetRepository } from "../domain/assets";
+import { OperationRepository } from "../domain/operations";
 import { ParamsRepository } from "../domain/params";
+import { BalanceRepository } from "../domain/balances";
+import { HistoryRepository } from "../domain/history";
 
 export class ActionsResult {
     actions: {
@@ -19,8 +20,14 @@ export class ActionsResult {
                     memo: string;
                 };
             };
+            receipt: {
+                receiver: string;
+                act_digest: string;
+            };
+            trx_id: string;
         };
         block_num: number;
+        block_time: string;
     }[];
     last_irreversible_block: number;
 }
@@ -32,44 +39,67 @@ export class EosService {
 
     private eos: any;
     private paramsRepository: ParamsRepository;
-
-    private isFake(item: OperationItem): boolean {
-        return item.from.indexOf(ADDRESS_SEPARATOR) >= 0 || item.to.indexOf(ADDRESS_SEPARATOR) >= 0;
-    }
+    private balanceRepository: BalanceRepository;
+    private assetRepository: AssetRepository;
+    private operationRepository: OperationRepository;
+    private historyRepository: HistoryRepository;
 
     constructor(private settings: Settings, private log: LogService) {
         this.eos = Eos.Localnet({ httpEndpoint: settings.EosApi.Eos.HttpEndpoint });
         this.paramsRepository = new ParamsRepository(settings);
+        this.balanceRepository = new BalanceRepository(settings);
+        this.assetRepository = new AssetRepository(settings);
+        this.operationRepository = new OperationRepository(settings);
+        this.historyRepository = new HistoryRepository(settings);
     }
 
     async handleActions(): Promise<void> {
-        let params = (await this.paramsRepository.get()) || { nextActionSequence: 0 };
-
-        console.log(params.nextActionSequence);
+        const assets = await this.assetRepository.all();
+        const parameters = (await this.paramsRepository.get()) || { nextActionSequence: 0 };
 
         while (true) {
-            let data: ActionsResult = await this.eos.getActions(this.settings.EosApi.HotWalletAccount, params.nextActionSequence, 0);
-            if (data &&
-                data.actions &&
-                data.actions.length &&
-                data.actions[0].block_num <= data.last_irreversible_block) {
-                let transfer = data.actions[0].action_trace.act.name == "transfer" &&
-                    data.actions[0].action_trace.act.data;
-                if (transfer) {
+            const actionResult: ActionsResult = await this.eos.getActions(this.settings.EosApi.HotWalletAccount, parameters.nextActionSequence, 0);
+            const action = actionResult.actions[0];
 
-                    // TODO: write history
+            if (!!action && action.block_num <= actionResult.last_irreversible_block) {
 
-                    if (transfer.to == this.settings.EosApi.HotWalletAccount && transfer.memo) {
-                        // TODO: write balnce record of "this.settings.EosApi.HotWalletAccount$${data.actions[0].action_trace.act.data.memo}"
+                const transfer = action.action_trace.act.name == "transfer" && action.action_trace.act.data;
+
+                if (!!transfer) {
+
+                    // set operation state to completed, if any
+                    const operationId = await this.operationRepository.updateCompleted(action.action_trace.trx_id, action.block_time, action.block_num);
+
+                    // get amount and asset
+                    const parts = transfer.quantity.split(" ", 2);
+                    const value = parseFloat(parts[0]);
+                    const asset = assets.find(a => a.assetId == parts[1]);
+
+                    if (!!asset) {
+                        const to = !!transfer.memo
+                            ? transfer.to + ADDRESS_SEPARATOR + transfer.memo
+                            : transfer.to;
+
+                        // record history
+                        await this.historyRepository.upsert(transfer.from, to, value, asset,
+                            action.block_num, action.action_trace.trx_id, action.action_trace.receipt.act_digest);
+
+                        // update balance of deposit wallet
+                        if (transfer.to == this.settings.EosApi.HotWalletAccount && transfer.memo) {
+                            this.balanceRepository.upsert(to, asset, value);
+                        }
                     }
                 }
 
-                // increment processed action number
-                params.nextActionSequence++;
-                await this.paramsRepository.update(params.nextActionSequence);
+                parameters.nextActionSequence++;
+                await this.paramsRepository.update(parameters.nextActionSequence);
             } else {
                 return;
             }
         }
+
+        // TODO: process expired operations
+
+
     }
 }
