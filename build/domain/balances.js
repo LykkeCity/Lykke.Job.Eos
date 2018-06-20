@@ -8,6 +8,12 @@ class BalanceRepository {
         this.tableName = "EosBalances";
         this.table = azure_storage_1.createTableService(settings.EosApi.DataConnectionString);
     }
+    /**
+     * Updates or creates balance record for address.
+     * @param address Address
+     * @param asset Asset
+     * @param affix Amount to add (if positive) or subtract (if negative)
+     */
     async upsert(address, asset, affix) {
         return queries_1.select(this.table, this.tableName, address, asset.assetId)
             .then(entity => {

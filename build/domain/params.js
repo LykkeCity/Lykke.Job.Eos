@@ -17,27 +17,30 @@ class ParamsRepository {
         else {
             return {
                 nextActionSequence: entity.NextActionSequence._,
+                lastProcessedBlockTimestamp: entity.LastProcessedBlockTimestamp && entity.LastProcessedBlockTimestamp._
             };
         }
     }
-    async get() {
-        return this.map(await queries_1.select(this.table, this.tableName, this.partitionKey, this.rowKey));
+    get() {
+        return queries_1.select(this.table, this.tableName, this.partitionKey, this.rowKey)
+            .then(entity => this.map(entity));
     }
-    async update(nextActionSequence) {
+    upsert(params) {
         return queries_1.ensureTable(this.table, this.tableName)
             .then(() => {
             return new Promise((res, rej) => {
                 const entity = {
                     PartitionKey: azure_storage_1.TableUtilities.entityGenerator.String(this.partitionKey),
                     RowKey: azure_storage_1.TableUtilities.entityGenerator.String(this.rowKey),
-                    NextActionSequence: azure_storage_1.TableUtilities.entityGenerator.Int64(nextActionSequence)
+                    NextActionSequence: azure_storage_1.TableUtilities.entityGenerator.Int64(params.nextActionSequence),
+                    LastProcessedBlockTimestamp: azure_storage_1.TableUtilities.entityGenerator.DateTime(params.lastProcessedBlockTimestamp)
                 };
-                this.table.insertOrReplaceEntity(this.tableName, entity, (err, result) => {
+                this.table.insertOrMergeEntity(this.tableName, entity, (err, result) => {
                     if (err) {
                         rej(err);
                     }
                     else {
-                        res(result);
+                        res();
                     }
                 });
             });

@@ -20,7 +20,7 @@ export class ParamsRepository {
         } else {
             return {
                 nextActionSequence: entity.NextActionSequence._,
-                lastProcessedBlockTimestamp: entity.LastProcessedBlockTimestamp._
+                lastProcessedBlockTimestamp: entity.LastProcessedBlockTimestamp && entity.LastProcessedBlockTimestamp._
             }
         }
     }

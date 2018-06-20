@@ -49,7 +49,7 @@ common_1.loadSettings()
     // start job
     interval_promise_1.default(async () => {
         try {
-            eos.handleActions();
+            await eos.handleActions();
         }
         catch (err) {
             await log.write(logService_1.LogLevel.error, "Lykke.Job.Eos", "HandleActions", err.message, undefined, err.name, err.stack);

@@ -22,17 +22,22 @@ class EosService {
         this.operationRepository = new operations_1.OperationRepository(settings);
         this.historyRepository = new history_1.HistoryRepository(settings);
     }
+    /**
+     * Tracks blockchain actions and updates operations state.
+     */
     async handleActions() {
         const assets = await this.assetRepository.all();
-        const parameters = (await this.paramsRepository.get()) || { nextActionSequence: 0 };
+        const parameters = (await this.paramsRepository.get()) || { nextActionSequence: 0, lastProcessedBlockTimestamp: new Date(0) };
+        let last_irreversible_block = 0;
         while (true) {
             const actionResult = await this.eos.getActions(this.settings.EosApi.HotWalletAccount, parameters.nextActionSequence, 0);
             const action = actionResult.actions[0];
+            last_irreversible_block = actionResult.last_irreversible_block;
             if (!!action && action.block_num <= actionResult.last_irreversible_block) {
                 const transfer = action.action_trace.act.name == "transfer" && action.action_trace.act.data;
                 if (!!transfer) {
                     // set operation state to completed, if any
-                    const operationId = await this.operationRepository.updateCompleted(action.action_trace.trx_id, action.block_time, action.block_num);
+                    const operationId = await this.operationRepository.updateCompleted(action.action_trace.trx_id, new Date(), action.block_time, action.block_num);
                     // get amount and asset
                     const parts = transfer.quantity.split(" ", 2);
                     const value = parseFloat(parts[0]);
@@ -50,13 +55,17 @@ class EosService {
                     }
                 }
                 parameters.nextActionSequence++;
-                await this.paramsRepository.update(parameters.nextActionSequence);
             }
             else {
                 break;
             }
         }
-        // TODO: process expired operations
+        // update expired operations (mark as failed)
+        const block = await this.eos.getBlock(last_irreversible_block);
+        await this.operationRepository.updateExpired(parameters.lastProcessedBlockTimestamp, block.timestamp);
+        // update state
+        parameters.lastProcessedBlockTimestamp = block.timestamp;
+        await this.paramsRepository.upsert(parameters);
     }
 }
 exports.EosService = EosService;

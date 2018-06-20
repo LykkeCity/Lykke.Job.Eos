@@ -80,7 +80,7 @@ export class EosService {
                     // get amount and asset
                     const parts = transfer.quantity.split(" ", 2);
                     const value = parseFloat(parts[0]);
-                    const asset = assets.find(a => a.assetId == parts[1]);
+                    const asset = assets.find(a => a.AssetId == parts[1]);
 
                     if (!!asset) {
                         const to = !!transfer.memo

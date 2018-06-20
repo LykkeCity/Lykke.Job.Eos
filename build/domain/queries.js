@@ -12,13 +12,26 @@ class QueryResult {
     }
 }
 exports.QueryResult = QueryResult;
+function fromAzure(entity) {
+    for (const key in entity) {
+        if (entity.hasOwnProperty(key)) {
+            console.log(key);
+            if (!!entity[key] && entity[key].hasOwnProperty("_")) {
+                switch (entity[key].EdmMetadata) {
+                }
+            }
+        }
+    }
+    return entity;
+}
+exports.fromAzure = fromAzure;
 function toAzure(continuation) {
     return !!continuation
         ? JSON.parse(common_1.fromBase64(continuation))
         : null;
 }
 exports.toAzure = toAzure;
-async function ensureTable(table, tableName) {
+function ensureTable(table, tableName) {
     return new Promise((res, rej) => {
         table.createTableIfNotExists(tableName, err => {
             if (err) {
@@ -31,47 +44,51 @@ async function ensureTable(table, tableName) {
     });
 }
 exports.ensureTable = ensureTable;
-async function remove(table, tableName, partitionKey, rowKey) {
-    await ensureTable(table, tableName);
-    return new Promise((res, rej) => {
-        const entity = {
-            PartitionKey: azure_storage_1.TableUtilities.entityGenerator.String(partitionKey),
-            RowKey: azure_storage_1.TableUtilities.entityGenerator.String(rowKey)
-        };
-        table.deleteEntity(tableName, entity, err => {
-            if (err) {
-                rej(err);
-            }
-            else {
-                res();
-            }
-        });
-    });
-}
-exports.remove = remove;
-async function select(table, tableName, partitionKeyOrQuery, rowKeyOrContinuationToken, throwIfNotFound = false) {
-    await ensureTable(table, tableName);
-    return new Promise((res, rej) => {
-        if (util_1.isString(partitionKeyOrQuery)) {
-            table.retrieveEntity(tableName, partitionKeyOrQuery, rowKeyOrContinuationToken, (err, result, response) => {
-                if (err && (response.statusCode != 404 || !!throwIfNotFound)) {
-                    rej(err);
-                }
-                else {
-                    res(result);
-                }
-            });
-        }
-        else {
-            table.queryEntities(tableName, partitionKeyOrQuery, rowKeyOrContinuationToken, (err, result, response) => {
+function remove(table, tableName, partitionKey, rowKey) {
+    return ensureTable(table, tableName)
+        .then(() => {
+        return new Promise((res, rej) => {
+            const entity = {
+                PartitionKey: azure_storage_1.TableUtilities.entityGenerator.String(partitionKey),
+                RowKey: azure_storage_1.TableUtilities.entityGenerator.String(rowKey)
+            };
+            table.deleteEntity(tableName, entity, err => {
                 if (err) {
                     rej(err);
                 }
                 else {
-                    res(result);
+                    res();
                 }
             });
-        }
+        });
+    });
+}
+exports.remove = remove;
+function select(table, tableName, partitionKeyOrQuery, rowKeyOrContinuationToken, throwIfNotFound = false) {
+    return ensureTable(table, tableName)
+        .then(() => {
+        return new Promise((res, rej) => {
+            if (util_1.isString(partitionKeyOrQuery)) {
+                table.retrieveEntity(tableName, partitionKeyOrQuery, rowKeyOrContinuationToken, (err, result, response) => {
+                    if (err && (response.statusCode != 404 || !!throwIfNotFound)) {
+                        rej(err);
+                    }
+                    else {
+                        res(fromAzure(result));
+                    }
+                });
+            }
+            else {
+                table.queryEntities(tableName, partitionKeyOrQuery, rowKeyOrContinuationToken, (err, result, response) => {
+                    if (err) {
+                        rej(err);
+                    }
+                    else {
+                        res(result);
+                    }
+                });
+            }
+        });
     });
 }
 exports.select = select;

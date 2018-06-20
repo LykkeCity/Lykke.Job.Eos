@@ -39,7 +39,7 @@ export class HistoryRepository {
                         From: TableUtilities.entityGenerator.String(from),
                         To: TableUtilities.entityGenerator.String(to),
                         Amount: TableUtilities.entityGenerator.Double(amount),
-                        AssetId: TableUtilities.entityGenerator.String(asset.assetId),
+                        AssetId: TableUtilities.entityGenerator.String(asset.AssetId),
                         TxId: TableUtilities.entityGenerator.String(txId),
                         OperationId: TableUtilities.entityGenerator.Guid(operationId)
                     };

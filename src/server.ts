@@ -60,7 +60,7 @@ loadSettings()
 
         interval(async () => {
             try {
-                eos.handleActions();
+                await eos.handleActions();
             } catch (err) {
                 await log.write(LogLevel.error, "Lykke.Job.Eos", "HandleActions", err.message, undefined, err.name, err.stack);
             }

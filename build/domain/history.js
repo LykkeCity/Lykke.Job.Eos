@@ -6,19 +6,19 @@ class HistoryRepository {
     constructor(settings) {
         this.settings = settings;
         this.historyTableName = "EosHistory";
-        this.historyIndexTableName = "EosHistoryIndex";
+        this.historyByTxIdTableName = "EosHistoryByTxId";
         this.table = azure_storage_1.createTableService(settings.EosApi.DataConnectionString);
     }
-    async upsert(from, to, amount, asset, blockNum, txId, actionId, operationId) {
+    upsert(from, to, amount, asset, blockNum, txId, actionId, operationId) {
         return queries_1.ensureTable(this.table, this.historyTableName)
-            .then(() => queries_1.ensureTable(this.table, this.historyIndexTableName))
+            .then(() => queries_1.ensureTable(this.table, this.historyByTxIdTableName))
             .then(() => {
             return new Promise((res, rej) => {
-                const historyIndexEntity = {
+                const historyByTxIdEntity = {
                     PartitionKey: azure_storage_1.TableUtilities.entityGenerator.String(txId),
                     Block: azure_storage_1.TableUtilities.entityGenerator.Int64(blockNum)
                 };
-                this.table.insertOrReplaceEntity(this.historyIndexTableName, historyIndexEntity, (err, result) => {
+                this.table.insertOrReplaceEntity(this.historyByTxIdTableName, historyByTxIdEntity, (err, result) => {
                     if (err) {
                         rej(err);
                     }

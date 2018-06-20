@@ -1,12 +1,15 @@
 import { Asset } from "./assets";
 import { TableService, createTableService, TableQuery, TableUtilities } from "azure-storage";
 import { Settings } from "../common";
-import { select } from "./queries";
+import { select, AzureEntity } from "./queries";
 
-export interface Balance {
-    address: string;
-    assetId: string;
-    amount: number;
+export class Balance extends AzureEntity {
+    constructor(address?: string) {
+
+    }
+    Address: string;
+    AssetId: string;
+    Amount: number;
 }
 
 export class BalanceRepository {
@@ -25,16 +28,16 @@ export class BalanceRepository {
      * @param affix Amount to add (if positive) or subtract (if negative)
      */
     async upsert(address: string, asset: Asset, affix: number): Promise<void> {
-        return select(this.table, this.tableName, address, asset.assetId)
+        return select<Balance>(this.table, this.tableName, address, asset.AssetId)
             .then(entity => {
                 return new Promise<void>((res, rej) => {
                     if (entity) {
-                        entity.amount._ += affix;
+                        entity.Amount += affix;
                     } else {
                         entity = {
                             PartitionKey: TableUtilities.entityGenerator.String(address),
-                            RowKey: TableUtilities.entityGenerator.String(asset.assetId),
-                            Amount: TableUtilities.entityGenerator.String(affix.toFixed(asset.accuracy))
+                            RowKey: TableUtilities.entityGenerator.String(asset.AssetId),
+                            Amount: TableUtilities.entityGenerator.String(affix.toFixed(asset.Accuracy))
                         };
                     }
                     this.table.insertOrReplaceEntity(this.tableName, entity, (err, result) => {
