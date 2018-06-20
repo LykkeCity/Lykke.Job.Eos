@@ -2,7 +2,7 @@ import { Settings, ADDRESS_SEPARATOR } from "../common";
 import { LogService } from "./logService";
 import { AssetRepository } from "../domain/assets";
 import { OperationRepository } from "../domain/operations";
-import { ParamsRepository } from "../domain/params";
+import { ParamsRepository, Params } from "../domain/params";
 import { BalanceRepository } from "../domain/balances";
 import { HistoryRepository } from "../domain/history";
 
@@ -45,7 +45,7 @@ export class EosService {
     private historyRepository: HistoryRepository;
 
     constructor(private settings: Settings, private log: LogService) {
-        this.eos = Eos.Localnet({ httpEndpoint: settings.EosApi.Eos.HttpEndpoint });
+        this.eos = Eos({ httpEndpoint: settings.EosApi.Eos.HttpEndpoint });
         this.paramsRepository = new ParamsRepository(settings);
         this.balanceRepository = new BalanceRepository(settings);
         this.assetRepository = new AssetRepository(settings);
@@ -53,13 +53,20 @@ export class EosService {
         this.historyRepository = new HistoryRepository(settings);
     }
 
+    /**
+     * Tracks blockchain actions and updates operations state.
+     */
     async handleActions(): Promise<void> {
         const assets = await this.assetRepository.all();
-        const parameters = (await this.paramsRepository.get()) || { nextActionSequence: 0 };
+        const parameters = (await this.paramsRepository.get()) || { nextActionSequence: 0, lastProcessedBlockTimestamp: new Date(0) };
+
+        let last_irreversible_block = 0;
 
         while (true) {
             const actionResult: ActionsResult = await this.eos.getActions(this.settings.EosApi.HotWalletAccount, parameters.nextActionSequence, 0);
             const action = actionResult.actions[0];
+
+            last_irreversible_block = actionResult.last_irreversible_block;
 
             if (!!action && action.block_num <= actionResult.last_irreversible_block) {
 
@@ -68,7 +75,7 @@ export class EosService {
                 if (!!transfer) {
 
                     // set operation state to completed, if any
-                    const operationId = await this.operationRepository.updateCompleted(action.action_trace.trx_id, action.block_time, action.block_num);
+                    const operationId = await this.operationRepository.updateCompleted(action.action_trace.trx_id, new Date(), action.block_time, action.block_num);
 
                     // get amount and asset
                     const parts = transfer.quantity.split(" ", 2);
@@ -92,14 +99,17 @@ export class EosService {
                 }
 
                 parameters.nextActionSequence++;
-                await this.paramsRepository.update(parameters.nextActionSequence);
             } else {
-                return;
+                break;
             }
         }
 
-        // TODO: process expired operations
+        // update expired operations (mark as failed)
+        const block = await this.eos.getBlock(last_irreversible_block);
+        await this.operationRepository.updateExpired(parameters.lastProcessedBlockTimestamp, block.timestamp);
 
-
+        // update state
+        parameters.lastProcessedBlockTimestamp = block.timestamp;
+        await this.paramsRepository.upsert(parameters);
     }
 }

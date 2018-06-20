@@ -6,23 +6,23 @@ import { ensureTable } from "./queries";
 export class HistoryRepository {
 
     private historyTableName: string = "EosHistory";
-    private historyIndexTableName: string = "EosHistoryIndex";
+    private historyByTxIdTableName: string = "EosHistoryByTxId";
     private table: TableService;
 
     constructor(private settings: Settings) {
         this.table = createTableService(settings.EosApi.DataConnectionString);
     }
 
-    async upsert(from: string, to: string, amount: number, asset: Asset, blockNum: number, txId: string, actionId: string, operationId?: string): Promise<void> {
+    upsert(from: string, to: string, amount: number, asset: Asset, blockNum: number, txId: string, actionId: string, operationId?: string): Promise<void> {
         return ensureTable(this.table, this.historyTableName)
-            .then(() => ensureTable(this.table, this.historyIndexTableName))
+            .then(() => ensureTable(this.table, this.historyByTxIdTableName))
             .then(() => {
                 return new Promise<void>((res, rej) => {
-                    const historyIndexEntity = {
+                    const historyByTxIdEntity = {
                         PartitionKey: TableUtilities.entityGenerator.String(txId),
                         Block: TableUtilities.entityGenerator.Int64(blockNum)
                     };
-                    this.table.insertOrReplaceEntity(this.historyIndexTableName, historyIndexEntity, (err, result) => {
+                    this.table.insertOrReplaceEntity(this.historyByTxIdTableName, historyByTxIdEntity, (err, result) => {
                         if (err) {
                             rej(err);
                         } else {

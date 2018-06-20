@@ -18,6 +18,12 @@ export class BalanceRepository {
         this.table = createTableService(settings.EosApi.DataConnectionString);
     }
 
+    /**
+     * Updates or creates balance record for address.
+     * @param address Address
+     * @param asset Asset
+     * @param affix Amount to add (if positive) or subtract (if negative)
+     */
     async upsert(address: string, asset: Asset, affix: number): Promise<void> {
         return select(this.table, this.tableName, address, asset.assetId)
             .then(entity => {
@@ -31,7 +37,6 @@ export class BalanceRepository {
                             Amount: TableUtilities.entityGenerator.String(affix.toFixed(asset.accuracy))
                         };
                     }
-
                     this.table.insertOrReplaceEntity(this.tableName, entity, (err, result) => {
                         if (err) {
                             rej(err);

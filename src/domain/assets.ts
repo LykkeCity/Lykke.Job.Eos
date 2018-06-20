@@ -43,6 +43,6 @@ export class AssetRepository {
     }
 
     async all(): Promise<Asset[]> {
-        return await all<Asset>(this.get);
+        return await all<Asset>((t, c) => this.get(t, c));
     }
 }

@@ -27,8 +27,11 @@ class AssetRepository {
             return this.map(await queries_1.select(this.table, this.tableName, idOrTake, ""));
         }
         else {
-            return new queries_1.QueryResult(await queries_1.select(this.table, this.tableName, new azure_storage_1.TableQuery().top(idOrTake || 100), queries_1.toAzure(continuation)), this.map).items;
+            return new queries_1.QueryResult(await queries_1.select(this.table, this.tableName, new azure_storage_1.TableQuery().top(idOrTake || 100), queries_1.toAzure(continuation)), this.map);
         }
+    }
+    async all() {
+        return await queries_1.all((t, c) => this.get(t, c));
     }
 }
 exports.AssetRepository = AssetRepository;

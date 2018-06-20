@@ -1,39 +1,31 @@
 import { TableService, TableUtilities, createTableService, TableQuery } from "azure-storage";
 import { Settings } from "../common";
 import { select, toAzure, remove, ensureTable } from "./queries";
-
-export enum OperationState {
-    Built = "Built",
-    Sent = "Sent",
-    Completed = "Completed",
-    Failed = "Failed"
-}
+import { isString, isDate } from "util";
 
 export class OperationRepository {
 
     private operationTableName: string = "EosOperations";
-    private operationIndexTableName: string = "EosOperationIndex"
-    private operationExpirationTableName: string = "EosOperationExpiration";
+    private operationByTxIdTableName: string = "EosOperationsByTxId"
+    private operationByExpiryTimeTableName: string = "EosOperationsByExpiryTime";
     private table: TableService;
 
     constructor(private settings: Settings) {
         this.table = createTableService(settings.EosApi.DataConnectionString);
     }
 
-    async updateCompleted(txId: string, minedUtc: Date | string, blockNum: number): Promise<string> {
-        return select(this.table, this.operationIndexTableName, txId, "")
-            .then(indexEntity => {
-                if (!!indexEntity) {
+    updateCompleted(trxId: string, completedUtc: Date | string, minedUtc: Date | string, blockNum: number): Promise<string> {
+        return select(this.table, this.operationByTxIdTableName, trxId, "")
+            .then(operationByTxIdEntity => {
+                if (!!operationByTxIdEntity) {
                     return new Promise<string>((res, rej) => {
-                        const operationId = indexEntity.OperationId._;
+                        const operationId = operationByTxIdEntity.OperationId._;
                         const operationEntity = {
                             PartitionKey: TableUtilities.entityGenerator.String(operationId),
-                            CompletedUtc: TableUtilities.entityGenerator.DateTime(new Date()),
+                            CompletedUtc: TableUtilities.entityGenerator.DateTime(completedUtc),
                             MinedUtc: TableUtilities.entityGenerator.DateTime(minedUtc),
-                            BlockNumber: TableUtilities.entityGenerator.Int64(blockNum),
-                            State: TableUtilities.entityGenerator.String(OperationState.Completed),
+                            BlockNum: TableUtilities.entityGenerator.Int64(blockNum)
                         };
-
                         this.table.insertOrMergeEntity(this.operationTableName, operationEntity, (err, result) => {
                             if (err) {
                                 rej(err);
@@ -48,17 +40,15 @@ export class OperationRepository {
             });
     }
 
-    async updateFailed(operationId: string, failedUtc: Date | string, error: string): Promise<void> {
+    updateFailed(operationId: string, failedUtc: Date | string, error: string): Promise<void> {
         return ensureTable(this.table, this.operationTableName)
             .then(() => {
                 return new Promise<void>((res, rej) => {
                     const operationEntity = {
                         PartitionKey: TableUtilities.entityGenerator.String(operationId),
                         FailedUtc: TableUtilities.entityGenerator.DateTime(failedUtc),
-                        Error: TableUtilities.entityGenerator.String(error),
-                        State: TableUtilities.entityGenerator.String(OperationState.Failed),
+                        Error: TableUtilities.entityGenerator.String(error)
                     };
-
                     this.table.insertOrMergeEntity(this.operationTableName, operationEntity, (err, result) => {
                         if (err) {
                             rej(err);
@@ -70,25 +60,34 @@ export class OperationRepository {
             });
     }
 
-    async updateExpired(expiryTime: string) {
-
+    async updateExpired(from: Date | string, to: Date | string) {
         let continuation: TableService.TableContinuationToken = null;
-        let query: TableQuery = new TableQuery().where(TableQuery.stringFilter("PartitionKey", "lt", expiryTime));
+
+        if (isDate(from)) {
+            from = from.toISOString();
+        }
+
+        if (isDate(to)) {
+            to = to.toISOString();
+        }
 
         do {
-            let res = await select(this.table, this.operationExpirationTableName, query, continuation);
+            const query: TableQuery = new TableQuery()
+                .where("PartitionKey > ? and PartitionKey <= ?", from, to);
+            const chunk = await select(this.table, this.operationByExpiryTimeTableName, query, continuation);
+            const errorMessage = "Transaction expired";
 
-            for (const item of res.entries) {
-                const operation = await select(this.table, this.operationTableName, item.RowKey._, "")
+            for (const entry of chunk.entries) {
+                const operation = await select(this.table, this.operationTableName, entry.RowKey._, "")
 
-                if (!!operation && (operation.State._ == OperationState.Built || operation.State._ == OperationState.Sent)) {
-                    await this.updateFailed(operation.OperationId._, new Date(), "Transaction expired");
+                if (!!operation &&
+                    (!operation.CompletedUtc || !operation.CompletedUtc._) &&
+                    (!operation.DeletedUtc || !operation.DeletedUtc._)) {
+                    await this.updateFailed(entry.RowKey._, new Date(), errorMessage);
                 }
-
-                await remove(this.table, this.operationExpirationTableName, item.PartitionKey._, item.RowKey._);
             }
 
-            continuation = res.continuationToken;
+            continuation = chunk.continuationToken;
 
         } while (!!continuation)
     }

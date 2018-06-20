@@ -1,5 +1,6 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
+const azure_storage_1 = require("azure-storage");
 const common_1 = require("../common");
 const util_1 = require("util");
 class QueryResult {
@@ -30,32 +31,59 @@ async function ensureTable(table, tableName) {
     });
 }
 exports.ensureTable = ensureTable;
-async function select(table, tableName, partitionKeyOrQuery, rowKeyOrContinuationToken) {
-    return ensureTable(table, tableName)
-        .then(() => {
-        return new Promise((res, rej) => {
-            if (util_1.isString(partitionKeyOrQuery)) {
-                table.retrieveEntity(tableName, partitionKeyOrQuery, rowKeyOrContinuationToken, (err, result, response) => {
-                    if (err && response.statusCode != 404) {
-                        rej(err);
-                    }
-                    else {
-                        res(result);
-                    }
-                });
+async function remove(table, tableName, partitionKey, rowKey) {
+    await ensureTable(table, tableName);
+    return new Promise((res, rej) => {
+        const entity = {
+            PartitionKey: azure_storage_1.TableUtilities.entityGenerator.String(partitionKey),
+            RowKey: azure_storage_1.TableUtilities.entityGenerator.String(rowKey)
+        };
+        table.deleteEntity(tableName, entity, err => {
+            if (err) {
+                rej(err);
             }
             else {
-                table.queryEntities(tableName, partitionKeyOrQuery, rowKeyOrContinuationToken, (err, result, response) => {
-                    if (err) {
-                        rej(err);
-                    }
-                    else {
-                        res(result);
-                    }
-                });
+                res();
             }
         });
     });
 }
+exports.remove = remove;
+async function select(table, tableName, partitionKeyOrQuery, rowKeyOrContinuationToken, throwIfNotFound = false) {
+    await ensureTable(table, tableName);
+    return new Promise((res, rej) => {
+        if (util_1.isString(partitionKeyOrQuery)) {
+            table.retrieveEntity(tableName, partitionKeyOrQuery, rowKeyOrContinuationToken, (err, result, response) => {
+                if (err && (response.statusCode != 404 || !!throwIfNotFound)) {
+                    rej(err);
+                }
+                else {
+                    res(result);
+                }
+            });
+        }
+        else {
+            table.queryEntities(tableName, partitionKeyOrQuery, rowKeyOrContinuationToken, (err, result, response) => {
+                if (err) {
+                    rej(err);
+                }
+                else {
+                    res(result);
+                }
+            });
+        }
+    });
+}
 exports.select = select;
+async function all(query) {
+    let continuation = null;
+    let items = [];
+    do {
+        let res = await query(100, continuation);
+        continuation = res.continuation;
+        items = items.concat(res.items);
+    } while (!!continuation);
+    return items;
+}
+exports.all = all;
 //# sourceMappingURL=queries.js.map

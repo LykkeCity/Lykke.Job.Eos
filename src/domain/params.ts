@@ -4,6 +4,7 @@ import { select, ensureTable } from "./queries";
 
 export interface Params {
     nextActionSequence: number;
+    lastProcessedBlockTimestamp: Date;
 }
 
 export class ParamsRepository {
@@ -19,6 +20,7 @@ export class ParamsRepository {
         } else {
             return {
                 nextActionSequence: entity.NextActionSequence._,
+                lastProcessedBlockTimestamp: entity.LastProcessedBlockTimestamp._
             }
         }
     }
@@ -27,24 +29,26 @@ export class ParamsRepository {
         this.table = createTableService(settings.EosApi.DataConnectionString);
     }
 
-    async get(): Promise<Params> {
-        return this.map(await select(this.table, this.tableName, this.partitionKey, this.rowKey));
+    get(): Promise<Params> {
+        return select(this.table, this.tableName, this.partitionKey, this.rowKey)
+            .then(entity => this.map(entity));
     }
 
-    async update(nextActionSequence: number): Promise<any> {
+    upsert(params: Params): Promise<void> {
         return ensureTable(this.table, this.tableName)
             .then(() => {
-                return new Promise<any>((res, rej) => {
+                return new Promise<void>((res, rej) => {
                     const entity = {
                         PartitionKey: TableUtilities.entityGenerator.String(this.partitionKey),
                         RowKey: TableUtilities.entityGenerator.String(this.rowKey),
-                        NextActionSequence: TableUtilities.entityGenerator.Int64(nextActionSequence)
+                        NextActionSequence: TableUtilities.entityGenerator.Int64(params.nextActionSequence),
+                        LastProcessedBlockTimestamp: TableUtilities.entityGenerator.DateTime(params.lastProcessedBlockTimestamp)
                     };
-                    this.table.insertOrReplaceEntity(this.tableName, entity, (err, result) => {
+                    this.table.insertOrMergeEntity(this.tableName, entity, (err, result) => {
                         if (err) {
                             rej(err);
                         } else {
-                            res(result);
+                            res();
                         }
                     });
                 });

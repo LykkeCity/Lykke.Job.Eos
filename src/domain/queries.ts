@@ -18,11 +18,11 @@ export class QueryResult<T> {
 
 export function toAzure(continuation: string): TableService.TableContinuationToken {
     return !!continuation
-        ? JSON.parse(fromBase64(continuation)) as TableService.TableContinuationToken
+        ? JSON.parse(fromBase64(continuation))
         : null;
 }
 
-export async function ensureTable(table: TableService, tableName: string): Promise<void> {
+export function ensureTable(table: TableService, tableName: string): Promise<void> {
     return new Promise<void>((res, rej) => {
         table.createTableIfNotExists(tableName, err => {
             if (err) {
@@ -34,10 +34,10 @@ export async function ensureTable(table: TableService, tableName: string): Promi
     });
 }
 
-export async function remove(table: TableService, tableName: string, partitionKey: string, rowKey: string): Promise<void> {
+export function remove(table: TableService, tableName: string, partitionKey: string, rowKey: string): Promise<void> {
     return ensureTable(table, tableName)
         .then(() => {
-            return new Promise<any | QueryResult<any>>((res, rej) => {
+            return new Promise<void>((res, rej) => {
                 const entity = {
                     PartitionKey: TableUtilities.entityGenerator.String(partitionKey),
                     RowKey: TableUtilities.entityGenerator.String(rowKey)
@@ -53,9 +53,9 @@ export async function remove(table: TableService, tableName: string, partitionKe
         });
 }
 
-export async function select(table: TableService, tableName: string, partitionKey: string, rowKey: string, throwIfNotFound?: boolean): Promise<any>;
-export async function select(table: TableService, tableName: string, query: TableQuery, continuationToken: TableService.TableContinuationToken): Promise<TableService.QueryEntitiesResult<any>>;
-export async function select(table: TableService, tableName: string, partitionKeyOrQuery: string | TableQuery, rowKeyOrContinuationToken: string | TableService.TableContinuationToken, throwIfNotFound = false): Promise<any | TableService.QueryEntitiesResult<any>> {
+export function select(table: TableService, tableName: string, partitionKey: string, rowKey: string, throwIfNotFound?: boolean): Promise<any>;
+export function select(table: TableService, tableName: string, query: TableQuery, continuationToken: TableService.TableContinuationToken): Promise<TableService.QueryEntitiesResult<any>>;
+export function select(table: TableService, tableName: string, partitionKeyOrQuery: string | TableQuery, rowKeyOrContinuationToken: string | TableService.TableContinuationToken, throwIfNotFound = false): Promise<any | TableService.QueryEntitiesResult<any>> {
     return ensureTable(table, tableName)
         .then(() => {
             return new Promise<any | QueryResult<any>>((res, rej) => {
@@ -85,7 +85,7 @@ export async function all<T>(query: (take: number, continuation?: string) => Pro
     let items: T[] = [];
 
     do {
-        let res = await this.get(100, continuation);
+        let res = await query(100, continuation);
         continuation = res.continuation;
         items = items.concat(res.items);
     } while (!!continuation)

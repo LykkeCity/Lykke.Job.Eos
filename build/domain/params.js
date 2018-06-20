@@ -27,7 +27,7 @@ class ParamsRepository {
         return queries_1.ensureTable(this.table, this.tableName)
             .then(() => {
             return new Promise((res, rej) => {
-                let entity = {
+                const entity = {
                     PartitionKey: azure_storage_1.TableUtilities.entityGenerator.String(this.partitionKey),
                     RowKey: azure_storage_1.TableUtilities.entityGenerator.String(this.rowKey),
                     NextActionSequence: azure_storage_1.TableUtilities.entityGenerator.Int64(nextActionSequence)
