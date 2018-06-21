@@ -1,68 +1,61 @@
 import { Asset } from "./assets";
-import { TableService, createTableService, TableQuery, TableUtilities, date } from "azure-storage";
 import { Settings } from "../common";
-import { ensureTable } from "./queries";
+import { AzureEntity, AzureRepository, Ignore, Int64, Double } from "./queries";
 
-export class HistoryRepository {
+export class HistoryEntity extends AzureEntity {
+    From: string;
+    To: string;
+    AssetId: string;
+    TxId: string;
+    OperationId: string;
+
+    @Double()
+    Amount: number;
+}
+
+export class HistoryByTxIdEntity extends AzureEntity {
+
+    @Ignore()
+    get TxId(): string {
+        return this.PartitionKey;
+    }
+
+    @Int64()
+    BlockNum: number;
+}
+
+export class HistoryRepository extends AzureRepository {
 
     private historyTableName: string = "EosHistory";
     private historyByTxIdTableName: string = "EosHistoryByTxId";
-    private table: TableService;
 
     constructor(private settings: Settings) {
-        this.table = createTableService(settings.EosApi.DataConnectionString);
+        super(settings.EosApi.DataConnectionString);
     }
 
-    upsert(from: string, to: string, amount: number, asset: Asset, blockNum: number, txId: string, actionId: string, operationId?: string): Promise<void> {
-        return ensureTable(this.table, this.historyTableName)
-            .then(() => ensureTable(this.table, this.historyByTxIdTableName))
-            .then(() => {
-                return new Promise<void>((res, rej) => {
-                    const historyByTxIdEntity = {
-                        PartitionKey: TableUtilities.entityGenerator.String(txId),
-                        Block: TableUtilities.entityGenerator.Int64(blockNum)
-                    };
-                    this.table.insertOrReplaceEntity(this.historyByTxIdTableName, historyByTxIdEntity, (err, result) => {
-                        if (err) {
-                            rej(err);
-                        } else {
-                            res();
-                        }
-                    });
-                });
-            })
-            .then(() => {
-                return new Promise<any>((res, rej) => {
-                    const historyEntity = {
-                        PartitionKey: TableUtilities.entityGenerator.String(`From_${from}`),
-                        RowKey: TableUtilities.entityGenerator.String(`${blockNum}_${txId}_${actionId}`),
-                        From: TableUtilities.entityGenerator.String(from),
-                        To: TableUtilities.entityGenerator.String(to),
-                        Amount: TableUtilities.entityGenerator.Double(amount),
-                        AssetId: TableUtilities.entityGenerator.String(asset.AssetId),
-                        TxId: TableUtilities.entityGenerator.String(txId),
-                        OperationId: TableUtilities.entityGenerator.Guid(operationId)
-                    };
-                    this.table.insertOrReplaceEntity(this.historyTableName, historyEntity, (err, result) => {
-                        if (err) {
-                            rej(err);
-                        } else {
-                            res(historyEntity);
-                        }
-                    });
-                });
-            })
-            .then(historyEntity => {
-                return new Promise<void>((res, rej) => {
-                    historyEntity.PartitionKey._ = `To_${to}`;
-                    this.table.insertOrReplaceEntity(this.historyTableName, historyEntity, (err, result) => {
-                        if (err) {
-                            rej(err);
-                        } else {
-                            res();
-                        }
-                    });
-                });
-            });
+    async upsert(from: string, to: string, amount: number, asset: Asset, blockNum: number, txId: string, actionId: string, operationId?: string): Promise<void> {
+
+        const historyByTxIdEntity = new HistoryByTxIdEntity();
+        historyByTxIdEntity.PartitionKey = txId;
+        historyByTxIdEntity.RowKey = "";
+        historyByTxIdEntity.BlockNum = blockNum;
+
+        await this.insertOrMerge(this.historyByTxIdTableName, historyByTxIdEntity);
+
+        const historyEntity = new HistoryEntity();
+        historyEntity.PartitionKey = `From_${from}`;
+        historyEntity.RowKey = `${blockNum}_${txId}_${actionId}`;
+        historyEntity.From = from;
+        historyEntity.To = to;
+        historyEntity.Amount = amount;
+        historyEntity.AssetId = asset.AssetId;
+        historyEntity.TxId = txId;
+        historyEntity.OperationId = operationId;
+
+        await this.insertOrMerge(this.historyTableName, historyEntity);
+
+        historyEntity.PartitionKey = `To_${to}`;
+
+        await this.insertOrMerge(this.historyTableName, historyEntity);
     }
 }

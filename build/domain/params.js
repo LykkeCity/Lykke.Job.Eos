@@ -1,50 +1,40 @@
 "use strict";
+var __decorate = (this && this.__decorate) || function (decorators, target, key, desc) {
+    var c = arguments.length, r = c < 3 ? target : desc === null ? desc = Object.getOwnPropertyDescriptor(target, key) : desc, d;
+    if (typeof Reflect === "object" && typeof Reflect.decorate === "function") r = Reflect.decorate(decorators, target, key, desc);
+    else for (var i = decorators.length - 1; i >= 0; i--) if (d = decorators[i]) r = (c < 3 ? d(r) : c > 3 ? d(target, key, r) : d(target, key)) || r;
+    return c > 3 && r && Object.defineProperty(target, key, r), r;
+};
+var __metadata = (this && this.__metadata) || function (k, v) {
+    if (typeof Reflect === "object" && typeof Reflect.metadata === "function") return Reflect.metadata(k, v);
+};
 Object.defineProperty(exports, "__esModule", { value: true });
-const azure_storage_1 = require("azure-storage");
 const queries_1 = require("./queries");
-class ParamsRepository {
+class Params extends queries_1.AzureEntity {
+}
+__decorate([
+    queries_1.Int64(),
+    __metadata("design:type", Number)
+], Params.prototype, "NextActionSequence", void 0);
+exports.Params = Params;
+class ParamsRepository extends queries_1.AzureRepository {
     constructor(settings) {
+        super(settings.EosApi.DataConnectionString);
         this.settings = settings;
         this.tableName = "EosParams";
         this.partitionKey = "Params";
         this.rowKey = "";
-        this.table = azure_storage_1.createTableService(settings.EosApi.DataConnectionString);
     }
-    map(entity) {
-        if (!entity) {
-            return null;
-        }
-        else {
-            return {
-                nextActionSequence: entity.NextActionSequence._,
-                lastProcessedBlockTimestamp: entity.LastProcessedBlockTimestamp && entity.LastProcessedBlockTimestamp._
-            };
-        }
+    async get() {
+        return await this.select(Params, this.tableName, this.partitionKey, this.rowKey);
     }
-    get() {
-        return queries_1.select(this.table, this.tableName, this.partitionKey, this.rowKey)
-            .then(entity => this.map(entity));
-    }
-    upsert(params) {
-        return queries_1.ensureTable(this.table, this.tableName)
-            .then(() => {
-            return new Promise((res, rej) => {
-                const entity = {
-                    PartitionKey: azure_storage_1.TableUtilities.entityGenerator.String(this.partitionKey),
-                    RowKey: azure_storage_1.TableUtilities.entityGenerator.String(this.rowKey),
-                    NextActionSequence: azure_storage_1.TableUtilities.entityGenerator.Int64(params.nextActionSequence),
-                    LastProcessedBlockTimestamp: azure_storage_1.TableUtilities.entityGenerator.DateTime(params.lastProcessedBlockTimestamp)
-                };
-                this.table.insertOrMergeEntity(this.tableName, entity, (err, result) => {
-                    if (err) {
-                        rej(err);
-                    }
-                    else {
-                        res();
-                    }
-                });
-            });
-        });
+    async upsert(params) {
+        const entity = new Params();
+        entity.PartitionKey = this.partitionKey;
+        entity.RowKey = this.rowKey;
+        entity.NextActionSequence = params.NextActionSequence;
+        entity.LastProcessedBlockTimestamp = params.LastProcessedBlockTimestamp;
+        await this.insertOrMerge(this.tableName, entity);
     }
 }
 exports.ParamsRepository = ParamsRepository;

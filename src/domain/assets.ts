@@ -1,35 +1,41 @@
-import { createTableService, TableService, TableQuery, TableUtilities } from "azure-storage";
+import { TableQuery } from "azure-storage";
 import { Settings } from "../common";
-import { QueryResult, select, toAzure, all, AzureEntity } from "./queries";
+import { AzureQueryResult, AzureEntity, AzureRepository, Ignore, Int32 } from "./queries";
 import { isString } from "util";
 
 export class Asset extends AzureEntity {
-    AssetId: string;
+
+    @Ignore()
+    get AssetId(): string {
+        return this.PartitionKey;
+    }
+
     Address: string;
     Name: string;
+
+    @Int32()
     Accuracy: number;
 }
 
-export class AssetRepository {
+export class AssetRepository extends AzureRepository {
 
     private tableName: string = "EosAssets";
-    private table: TableService;
 
     constructor(private settings: Settings) {
-        this.table = createTableService(settings.EosApi.DataConnectionString);
+        super(settings.EosApi.DataConnectionString);
     }
 
     async get(id: string): Promise<Asset>;
-    async get(take: number, continuation?: string): Promise<QueryResult<Asset>>;
-    async get(idOrTake: string | number, continuation?: string): Promise<Asset | QueryResult<Asset>> {
+    async get(take: number, continuation?: string): Promise<AzureQueryResult<Asset>>;
+    async get(idOrTake: string | number, continuation?: string): Promise<Asset | AzureQueryResult<Asset>> {
         if (isString(idOrTake)) {
-            return await select(Asset, this.table, this.tableName, idOrTake, "");
+            return await this.select(Asset, this.tableName, idOrTake, "");
         } else {
-            return await select(Asset, this.table, this.tableName, new TableQuery().top(idOrTake || 100), toAzure(continuation));
+            return await this.select(Asset, this.tableName, new TableQuery().top(idOrTake || 100), continuation);
         }
     }
 
     async all(): Promise<Asset[]> {
-        return await all(c => this.get(100, c));
+        return await this.selectAll(c => this.get(100, c));
     }
 }

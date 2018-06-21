@@ -61,3 +61,11 @@ export async function loadSettings(): Promise<Settings> {
         return JSON.parse(await util.promisify(fs.readFile)(process.env.SettingsUrl, Encoding.utf8)) as Settings;
     }
 }
+
+export function isoUTC(iso: string): Date {
+    iso = iso.endsWith("Z")
+        ? iso
+        : `${iso}Z`;
+
+    return new Date(iso);
+}

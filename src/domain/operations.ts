@@ -1,93 +1,96 @@
-import { TableService, TableUtilities, createTableService, TableQuery } from "azure-storage";
+import { TableQuery } from "azure-storage";
 import { Settings } from "../common";
-import { select, toAzure, remove, ensureTable } from "./queries";
-import { isString, isDate } from "util";
+import { AzureRepository, AzureEntity, Ignore, Int64 } from "./queries";
+import { isDate } from "util";
 
-export class OperationRepository {
+export class OperationByTxIdEntity extends AzureEntity {
+    @Ignore()
+    get TxId(): string {
+        return this.PartitionKey;
+    }
+
+    OperationId: string;
+}
+
+export class OperationEntity extends AzureEntity {
+    @Ignore()
+    get OperationId(): string {
+        return this.PartitionKey;
+    }
+
+    CompletedUtc?: Date;
+    MinedUtc?: Date;
+    FailedUtc?: Date;
+
+    @Int64()
+    BlockNum?: number;
+}
+
+export class OperationByExpiryTimeEntity extends AzureEntity {
+    @Ignore()
+    get ExpiryTime(): Date {
+        return new Date(this.PartitionKey);
+    }
+
+    @Ignore()
+    get OperationId(): string {
+        return this.RowKey;
+    }
+}
+
+export class OperationRepository extends AzureRepository {
 
     private operationTableName: string = "EosOperations";
     private operationByTxIdTableName: string = "EosOperationsByTxId"
     private operationByExpiryTimeTableName: string = "EosOperationsByExpiryTime";
-    private table: TableService;
 
     constructor(private settings: Settings) {
-        this.table = createTableService(settings.EosApi.DataConnectionString);
+        super(settings.EosApi.DataConnectionString);
     }
 
-    updateCompleted(trxId: string, completedUtc: Date | string, minedUtc: Date | string, blockNum: number): Promise<string> {
-        return select(this.table, this.operationByTxIdTableName, trxId, "")
-            .then(operationByTxIdEntity => {
-                if (!!operationByTxIdEntity) {
-                    return new Promise<string>((res, rej) => {
-                        const operationId = operationByTxIdEntity.OperationId._;
-                        const operationEntity = {
-                            PartitionKey: TableUtilities.entityGenerator.String(operationId),
-                            CompletedUtc: TableUtilities.entityGenerator.DateTime(completedUtc),
-                            MinedUtc: TableUtilities.entityGenerator.DateTime(minedUtc),
-                            BlockNum: TableUtilities.entityGenerator.Int64(blockNum)
-                        };
-                        this.table.insertOrMergeEntity(this.operationTableName, operationEntity, (err, result) => {
-                            if (err) {
-                                rej(err);
-                            } else {
-                                res(operationId);
-                            }
-                        });
-                    });
-                } else {
-                    return null;
-                }
-            });
-    }
+    async updateCompleted(trxId: string, completedUtc: Date, minedUtc: Date, blockNum: number): Promise<string> {
+        const operationByTxIdEntity = await this.select(OperationByTxIdEntity, this.operationByTxIdTableName, trxId, "");
 
-    updateFailed(operationId: string, failedUtc: Date | string, error: string): Promise<void> {
-        return ensureTable(this.table, this.operationTableName)
-            .then(() => {
-                return new Promise<void>((res, rej) => {
-                    const operationEntity = {
-                        PartitionKey: TableUtilities.entityGenerator.String(operationId),
-                        FailedUtc: TableUtilities.entityGenerator.DateTime(failedUtc),
-                        Error: TableUtilities.entityGenerator.String(error)
-                    };
-                    this.table.insertOrMergeEntity(this.operationTableName, operationEntity, (err, result) => {
-                        if (err) {
-                            rej(err);
-                        } else {
-                            res();
-                        }
-                    });
-                });
-            });
-    }
+        if (!!operationByTxIdEntity) {
+            const operationEntity = new OperationEntity();
+            operationEntity.PartitionKey = operationByTxIdEntity.OperationId;
+            operationEntity.RowKey = "";
+            operationEntity.CompletedUtc = completedUtc;
+            operationEntity.MinedUtc = minedUtc;
+            operationEntity.BlockNum = blockNum;
 
-    async updateExpired(from: Date | string, to: Date | string) {
-        let continuation: TableService.TableContinuationToken = null;
-
-        if (isDate(from)) {
-            from = from.toISOString();
+            await this.insertOrMerge(this.operationTableName, operationEntity);
         }
 
-        if (isDate(to)) {
-            to = to.toISOString();
-        }
+        return operationByTxIdEntity && operationByTxIdEntity.OperationId;
+    }
+
+    async updateFailed(operationId: string, failedUtc: Date, error: string): Promise<void> {
+        const operationEntity = new OperationEntity();
+        operationEntity.PartitionKey = operationId;
+        operationEntity.RowKey = "";
+        operationEntity.FailedUtc = failedUtc;
+        operationEntity.Error = error;
+
+        await this.insertOrMerge(this.operationTableName, operationEntity);
+    }
+
+    async updateExpired(from: Date, to: Date) {
+        let continuation: string = null;
 
         do {
-            const query: TableQuery = new TableQuery()
-                .where("PartitionKey > ? and PartitionKey <= ?", from, to);
-            const chunk = await select(this.table, this.operationByExpiryTimeTableName, query, continuation);
-            const errorMessage = "Transaction expired";
+            const query: TableQuery = new TableQuery().where("PartitionKey > ? and PartitionKey <= ?", from.toISOString(), to.toISOString());
+            const chunk = await this.select(OperationByExpiryTimeEntity, this.operationByExpiryTimeTableName, query, continuation);
 
-            for (const entry of chunk.entries) {
-                const operation = await select(this.table, this.operationTableName, entry.RowKey._, "")
+            for (const entity of chunk.items) {
+                const operation = await this.select(OperationEntity, this.operationTableName, entity.OperationId, "")
 
-                if (!!operation &&
-                    (!operation.CompletedUtc || !operation.CompletedUtc._) &&
-                    (!operation.DeletedUtc || !operation.DeletedUtc._)) {
-                    await this.updateFailed(entry.RowKey._, new Date(), errorMessage);
+                if (!!operation && !operation.CompletedUtc && !operation.FailedUtc) {
+                    await this.updateFailed(entity.OperationId, entity.ExpiryTime, "Transaction expired");
                 }
             }
 
-            continuation = chunk.continuationToken;
+            continuation = chunk.continuation;
 
         } while (!!continuation)
     }

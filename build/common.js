@@ -52,4 +52,11 @@ async function loadSettings() {
     }
 }
 exports.loadSettings = loadSettings;
+function isoUTC(iso) {
+    iso = iso.endsWith("Z")
+        ? iso
+        : `${iso}Z`;
+    return new Date(iso);
+}
+exports.isoUTC = isoUTC;
 //# sourceMappingURL=common.js.map

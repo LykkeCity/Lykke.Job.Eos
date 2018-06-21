@@ -1,85 +1,102 @@
 "use strict";
+var __decorate = (this && this.__decorate) || function (decorators, target, key, desc) {
+    var c = arguments.length, r = c < 3 ? target : desc === null ? desc = Object.getOwnPropertyDescriptor(target, key) : desc, d;
+    if (typeof Reflect === "object" && typeof Reflect.decorate === "function") r = Reflect.decorate(decorators, target, key, desc);
+    else for (var i = decorators.length - 1; i >= 0; i--) if (d = decorators[i]) r = (c < 3 ? d(r) : c > 3 ? d(target, key, r) : d(target, key)) || r;
+    return c > 3 && r && Object.defineProperty(target, key, r), r;
+};
+var __metadata = (this && this.__metadata) || function (k, v) {
+    if (typeof Reflect === "object" && typeof Reflect.metadata === "function") return Reflect.metadata(k, v);
+};
 Object.defineProperty(exports, "__esModule", { value: true });
 const azure_storage_1 = require("azure-storage");
 const queries_1 = require("./queries");
-const util_1 = require("util");
-class OperationRepository {
+class OperationByTxIdEntity extends queries_1.AzureEntity {
+    get TxId() {
+        return this.PartitionKey;
+    }
+}
+__decorate([
+    queries_1.Ignore(),
+    __metadata("design:type", String),
+    __metadata("design:paramtypes", [])
+], OperationByTxIdEntity.prototype, "TxId", null);
+exports.OperationByTxIdEntity = OperationByTxIdEntity;
+class OperationEntity extends queries_1.AzureEntity {
+    get OperationId() {
+        return this.PartitionKey;
+    }
+}
+__decorate([
+    queries_1.Ignore(),
+    __metadata("design:type", String),
+    __metadata("design:paramtypes", [])
+], OperationEntity.prototype, "OperationId", null);
+__decorate([
+    queries_1.Int64(),
+    __metadata("design:type", Number)
+], OperationEntity.prototype, "BlockNum", void 0);
+exports.OperationEntity = OperationEntity;
+class OperationByExpiryTimeEntity extends queries_1.AzureEntity {
+    get ExpiryTime() {
+        return new Date(this.PartitionKey);
+    }
+    get OperationId() {
+        return this.RowKey;
+    }
+}
+__decorate([
+    queries_1.Ignore(),
+    __metadata("design:type", Date),
+    __metadata("design:paramtypes", [])
+], OperationByExpiryTimeEntity.prototype, "ExpiryTime", null);
+__decorate([
+    queries_1.Ignore(),
+    __metadata("design:type", String),
+    __metadata("design:paramtypes", [])
+], OperationByExpiryTimeEntity.prototype, "OperationId", null);
+exports.OperationByExpiryTimeEntity = OperationByExpiryTimeEntity;
+class OperationRepository extends queries_1.AzureRepository {
     constructor(settings) {
+        super(settings.EosApi.DataConnectionString);
         this.settings = settings;
         this.operationTableName = "EosOperations";
         this.operationByTxIdTableName = "EosOperationsByTxId";
         this.operationByExpiryTimeTableName = "EosOperationsByExpiryTime";
-        this.table = azure_storage_1.createTableService(settings.EosApi.DataConnectionString);
     }
-    updateCompleted(trxId, completedUtc, minedUtc, blockNum) {
-        return queries_1.select(this.table, this.operationByTxIdTableName, trxId, "")
-            .then(operationByTxIdEntity => {
-            if (!!operationByTxIdEntity) {
-                return new Promise((res, rej) => {
-                    const operationId = operationByTxIdEntity.OperationId._;
-                    const operationEntity = {
-                        PartitionKey: azure_storage_1.TableUtilities.entityGenerator.String(operationId),
-                        CompletedUtc: azure_storage_1.TableUtilities.entityGenerator.DateTime(completedUtc),
-                        MinedUtc: azure_storage_1.TableUtilities.entityGenerator.DateTime(minedUtc),
-                        BlockNum: azure_storage_1.TableUtilities.entityGenerator.Int64(blockNum)
-                    };
-                    this.table.insertOrMergeEntity(this.operationTableName, operationEntity, (err, result) => {
-                        if (err) {
-                            rej(err);
-                        }
-                        else {
-                            res(operationId);
-                        }
-                    });
-                });
-            }
-            else {
-                return null;
-            }
-        });
+    async updateCompleted(trxId, completedUtc, minedUtc, blockNum) {
+        const operationByTxIdEntity = await this.select(OperationByTxIdEntity, this.operationByTxIdTableName, trxId, "");
+        if (!!operationByTxIdEntity) {
+            const operationEntity = new OperationEntity();
+            operationEntity.PartitionKey = operationByTxIdEntity.OperationId;
+            operationEntity.RowKey = "";
+            operationEntity.CompletedUtc = completedUtc;
+            operationEntity.MinedUtc = minedUtc;
+            operationEntity.BlockNum = blockNum;
+            await this.insertOrMerge(this.operationTableName, operationEntity);
+        }
+        return operationByTxIdEntity && operationByTxIdEntity.OperationId;
     }
-    updateFailed(operationId, failedUtc, error) {
-        return queries_1.ensureTable(this.table, this.operationTableName)
-            .then(() => {
-            return new Promise((res, rej) => {
-                const operationEntity = {
-                    PartitionKey: azure_storage_1.TableUtilities.entityGenerator.String(operationId),
-                    FailedUtc: azure_storage_1.TableUtilities.entityGenerator.DateTime(failedUtc),
-                    Error: azure_storage_1.TableUtilities.entityGenerator.String(error)
-                };
-                this.table.insertOrMergeEntity(this.operationTableName, operationEntity, (err, result) => {
-                    if (err) {
-                        rej(err);
-                    }
-                    else {
-                        res();
-                    }
-                });
-            });
-        });
+    async updateFailed(operationId, failedUtc, error) {
+        const operationEntity = new OperationEntity();
+        operationEntity.PartitionKey = operationId;
+        operationEntity.RowKey = "";
+        operationEntity.FailedUtc = failedUtc;
+        operationEntity.Error = error;
+        await this.insertOrMerge(this.operationTableName, operationEntity);
     }
     async updateExpired(from, to) {
         let continuation = null;
-        if (util_1.isDate(from)) {
-            from = from.toISOString();
-        }
-        if (util_1.isDate(to)) {
-            to = to.toISOString();
-        }
         do {
-            const query = new azure_storage_1.TableQuery()
-                .where("PartitionKey > ? and PartitionKey <= ?", from, to);
-            const chunk = await queries_1.select(this.table, this.operationByExpiryTimeTableName, query, continuation);
-            const errorMessage = "Transaction expired";
-            for (const entry of chunk.entries) {
-                const operation = await queries_1.select(this.table, this.operationTableName, entry.RowKey._, "");
-                if (!!operation &&
-                    (!operation.CompletedUtc || !operation.CompletedUtc._) &&
-                    (!operation.DeletedUtc || !operation.DeletedUtc._)) {
-                    await this.updateFailed(entry.RowKey._, new Date(), errorMessage);
+            const query = new azure_storage_1.TableQuery().where("PartitionKey > ? and PartitionKey <= ?", from.toISOString(), to.toISOString());
+            const chunk = await this.select(OperationByExpiryTimeEntity, this.operationByExpiryTimeTableName, query, continuation);
+            for (const entity of chunk.items) {
+                const operation = await this.select(OperationEntity, this.operationTableName, entity.OperationId, "");
+                if (!!operation && !operation.CompletedUtc && !operation.FailedUtc) {
+                    await this.updateFailed(entity.OperationId, entity.ExpiryTime, "Transaction expired");
                 }
             }
-            continuation = chunk.continuationToken;
+            continuation = chunk.continuation;
         } while (!!continuation);
     }
 }
