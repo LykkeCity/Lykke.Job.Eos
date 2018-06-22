@@ -31,11 +31,11 @@ __decorate([
 __decorate([
     queries_1.Double(),
     __metadata("design:type", Number)
-], Balance.prototype, "Amount", void 0);
+], Balance.prototype, "Balance", void 0);
 exports.Balance = Balance;
 class BalanceRepository extends queries_1.AzureRepository {
     constructor(settings) {
-        super(settings.EosApi.DataConnectionString);
+        super(settings.EosJob.DataConnectionString);
         this.settings = settings;
         this.tableName = "EosBalances";
     }
@@ -48,16 +48,16 @@ class BalanceRepository extends queries_1.AzureRepository {
     async upsert(address, asset, affix) {
         let entity = await this.select(Balance, this.tableName, address, asset.AssetId);
         if (entity) {
-            entity.Amount += affix;
+            entity.Balance += affix;
         }
         else {
             entity = new Balance();
             entity.PartitionKey = address;
             entity.RowKey = asset.AssetId;
-            entity.Amount = affix;
+            entity.Balance = affix;
         }
         await this.insertOrMerge(this.tableName, entity);
-        return entity.Amount;
+        return entity.Balance;
     }
 }
 exports.BalanceRepository = BalanceRepository;

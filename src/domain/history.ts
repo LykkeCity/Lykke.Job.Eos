@@ -30,7 +30,7 @@ export class HistoryRepository extends AzureRepository {
     private historyByTxIdTableName: string = "EosHistoryByTxId";
 
     constructor(private settings: Settings) {
-        super(settings.EosApi.DataConnectionString);
+        super(settings.EosJob.DataConnectionString);
     }
 
     async upsert(from: string, to: string, amount: number, asset: Asset, blockNum: number, txId: string, actionId: string, operationId?: string): Promise<void> {

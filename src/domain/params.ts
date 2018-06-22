@@ -15,7 +15,7 @@ export class ParamsRepository extends AzureRepository {
     private rowKey = "";
 
     constructor(private settings: Settings) {
-        super(settings.EosApi.DataConnectionString);
+        super(settings.EosJob.DataConnectionString);
     }
 
     async get(): Promise<Params> {

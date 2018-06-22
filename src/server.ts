@@ -64,7 +64,7 @@ loadSettings()
             } catch (err) {
                 await log.write(LogLevel.error, "Lykke.Job.Eos", "HandleActions", err.message, undefined, err.name, err.stack);
             }
-        }, settings.EosApi.Interval, { stopOnError: false });
+        }, settings.EosJob.Interval, { stopOnError: false });
     })
     .then(
         _ => console.log("Started"),

@@ -51,7 +51,7 @@ export class EosService {
     private logInfo: (message: string, context?: any) => Promise<void>;
 
     constructor(private settings: Settings, private log: LogService) {
-        this.eos = Eos({ httpEndpoint: settings.EosApi.Eos.HttpEndpoint });
+        this.eos = Eos({ httpEndpoint: settings.EosJob.Eos.HttpEndpoint });
         this.paramsRepository = new ParamsRepository(settings);
         this.balanceRepository = new BalanceRepository(settings);
         this.assetRepository = new AssetRepository(settings);
@@ -76,14 +76,14 @@ export class EosService {
         let last_irreversible_block = 0;
 
         while (true) {
-            const actionResult: ActionsResult = await this.eos.getActions(this.settings.EosApi.HotWalletAccount, params.NextActionSequence, 0);
+            const actionResult: ActionsResult = await this.eos.getActions(this.settings.EosJob.HotWalletAccount, params.NextActionSequence, 0);
             const action = actionResult.actions[0];
 
             last_irreversible_block = actionResult.last_irreversible_block;
 
             if (!!action && action.block_num <= actionResult.last_irreversible_block) {
 
-                await this.logInfo("Action detected", { Account: this.settings.EosApi.HotWalletAccount, Seq: action.account_action_seq });
+                await this.logInfo("Action detected", { Account: this.settings.EosJob.HotWalletAccount, Seq: action.account_action_seq });
 
                 const transfer = action.action_trace.act.name == "transfer" && action.action_trace.act.data;
 
@@ -108,9 +108,9 @@ export class EosService {
                         await this.logInfo("Transfer recorded", transfer);
 
                         // update balance of deposit wallet
-                        if (transfer.to == this.settings.EosApi.HotWalletAccount && !!transfer.memo) {
+                        if (transfer.to == this.settings.EosJob.HotWalletAccount && !!transfer.memo) {
                             const balance = await this.balanceRepository.upsert(to, asset, value);
-                            await this.logInfo("Balance updated", { Address: to, Affix: value, FinalBalance: balance });
+                            await this.logInfo("Balance updated", { Address: to, Affix: value, Asset: asset.AssetId, FinalBalance: balance });
                         }
                     } else {
                         await this.logInfo("Not tracked token", parts[1]);

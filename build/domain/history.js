@@ -34,7 +34,7 @@ __decorate([
 exports.HistoryByTxIdEntity = HistoryByTxIdEntity;
 class HistoryRepository extends queries_1.AzureRepository {
     constructor(settings) {
-        super(settings.EosApi.DataConnectionString);
+        super(settings.EosJob.DataConnectionString);
         this.settings = settings;
         this.historyTableName = "EosHistory";
         this.historyByTxIdTableName = "EosHistoryByTxId";

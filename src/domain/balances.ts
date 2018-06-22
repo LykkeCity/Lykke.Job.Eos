@@ -15,7 +15,7 @@ export class Balance extends AzureEntity {
     }
 
     @Double()
-    Amount: number;
+    Balance: number;
 }
 
 export class BalanceRepository extends AzureRepository {
@@ -23,7 +23,7 @@ export class BalanceRepository extends AzureRepository {
     private tableName: string = "EosBalances";
 
     constructor(private settings: Settings) {
-        super(settings.EosApi.DataConnectionString);
+        super(settings.EosJob.DataConnectionString);
     }
 
     /**
@@ -36,16 +36,16 @@ export class BalanceRepository extends AzureRepository {
         let entity = await this.select(Balance, this.tableName, address, asset.AssetId);
 
         if (entity) {
-            entity.Amount += affix;
+            entity.Balance += affix;
         } else {
             entity = new Balance();
             entity.PartitionKey = address;
             entity.RowKey = asset.AssetId;
-            entity.Amount = affix;
+            entity.Balance = affix;
         }
 
         await this.insertOrMerge(this.tableName, entity);
 
-        return entity.Amount;
+        return entity.Balance;
     }
 }

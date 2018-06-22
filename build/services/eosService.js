@@ -13,7 +13,7 @@ class EosService {
     constructor(settings, log) {
         this.settings = settings;
         this.log = log;
-        this.eos = Eos({ httpEndpoint: settings.EosApi.Eos.HttpEndpoint });
+        this.eos = Eos({ httpEndpoint: settings.EosJob.Eos.HttpEndpoint });
         this.paramsRepository = new params_1.ParamsRepository(settings);
         this.balanceRepository = new balances_1.BalanceRepository(settings);
         this.assetRepository = new assets_1.AssetRepository(settings);
@@ -34,11 +34,11 @@ class EosService {
         }
         let last_irreversible_block = 0;
         while (true) {
-            const actionResult = await this.eos.getActions(this.settings.EosApi.HotWalletAccount, params.NextActionSequence, 0);
+            const actionResult = await this.eos.getActions(this.settings.EosJob.HotWalletAccount, params.NextActionSequence, 0);
             const action = actionResult.actions[0];
             last_irreversible_block = actionResult.last_irreversible_block;
             if (!!action && action.block_num <= actionResult.last_irreversible_block) {
-                await this.logInfo("Action detected", { Account: this.settings.EosApi.HotWalletAccount, Seq: action.account_action_seq });
+                await this.logInfo("Action detected", { Account: this.settings.EosJob.HotWalletAccount, Seq: action.account_action_seq });
                 const transfer = action.action_trace.act.name == "transfer" && action.action_trace.act.data;
                 if (!!transfer) {
                     // set operation state to completed, if any
@@ -55,9 +55,9 @@ class EosService {
                         await this.historyRepository.upsert(transfer.from, to, value, asset, action.block_num, action.action_trace.trx_id, action.action_trace.receipt.act_digest);
                         await this.logInfo("Transfer recorded", transfer);
                         // update balance of deposit wallet
-                        if (transfer.to == this.settings.EosApi.HotWalletAccount && !!transfer.memo) {
+                        if (transfer.to == this.settings.EosJob.HotWalletAccount && !!transfer.memo) {
                             const balance = await this.balanceRepository.upsert(to, asset, value);
-                            await this.logInfo("Balance updated", { Address: to, Affix: value, FinalBalance: balance });
+                            await this.logInfo("Balance updated", { Address: to, Affix: value, Asset: asset.AssetId, FinalBalance: balance });
                         }
                     }
                     else {

@@ -54,7 +54,7 @@ common_1.loadSettings()
         catch (err) {
             await log.write(logService_1.LogLevel.error, "Lykke.Job.Eos", "HandleActions", err.message, undefined, err.name, err.stack);
         }
-    }, settings.EosApi.Interval, { stopOnError: false });
+    }, settings.EosJob.Interval, { stopOnError: false });
 })
     .then(_ => console.log("Started"), e => console.log(e));
 //# sourceMappingURL=server.js.map

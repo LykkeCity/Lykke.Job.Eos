@@ -45,7 +45,7 @@ export class OperationRepository extends AzureRepository {
     private operationByExpiryTimeTableName: string = "EosOperationsByExpiryTime";
 
     constructor(private settings: Settings) {
-        super(settings.EosApi.DataConnectionString);
+        super(settings.EosJob.DataConnectionString);
     }
 
     async updateCompleted(trxId: string, completedUtc: Date, minedUtc: Date, blockNum: number): Promise<string> {

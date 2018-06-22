@@ -29,7 +29,7 @@ __decorate([
 exports.Asset = Asset;
 class AssetRepository extends queries_1.AzureRepository {
     constructor(settings) {
-        super(settings.EosApi.DataConnectionString);
+        super(settings.EosJob.DataConnectionString);
         this.settings = settings;
         this.tableName = "EosAssets";
     }

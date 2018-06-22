@@ -22,7 +22,7 @@ export class AssetRepository extends AzureRepository {
     private tableName: string = "EosAssets";
 
     constructor(private settings: Settings) {
-        super(settings.EosApi.DataConnectionString);
+        super(settings.EosJob.DataConnectionString);
     }
 
     async get(id: string): Promise<Asset>;

@@ -1,6 +1,6 @@
 import { TableService, TableQuery, TableUtilities, createTableService } from "azure-storage";
 import { fromBase64, toBase64 } from "../common";
-import { isString, isNumber } from "util";
+import { isString } from "util";
 import "reflect-metadata";
 
 const azureEdmMetadataKey = Symbol("Azure.Edm");
@@ -22,7 +22,76 @@ export function Int32() {
 }
 
 export function Double() {
-    return (target: Object, propertyKey: string | symbol) => Reflect.defineMetadata(azureEdmMetadataKey, int64EdmMetadataKey, target, propertyKey);
+    return (target: Object, propertyKey: string | symbol) => Reflect.defineMetadata(azureEdmMetadataKey, doubleEdmMetadataKey, target, propertyKey);
+}
+
+export function validateContinuation(continuation: string) {
+    try {
+        return toAzure(continuation) != null;
+    } catch (e) {
+        return false;
+    }
+}
+
+export function fromAzure<T extends AzureEntity>(entity: any, t: new () => T): T;
+export function fromAzure(continuationToken: TableService.TableContinuationToken): string;
+export function fromAzure<T extends AzureEntity>(entityOrContinuationToken: any | TableService.TableContinuationToken, t?: new () => T): T | string {
+    if (!entityOrContinuationToken) {
+        return null;
+    }
+    if (!t) {
+        return toBase64(entityOrContinuationToken);
+    } else {
+        const result = new t();
+        for (const key in entityOrContinuationToken) {
+            if (entityOrContinuationToken.hasOwnProperty(key)) {
+                if (!!entityOrContinuationToken[key] && entityOrContinuationToken[key].hasOwnProperty("_")) {
+                    switch (entityOrContinuationToken[key].$) {
+                        case "Edm.DateTime":
+                            result[key] = new Date(entityOrContinuationToken[key]._)
+                            break;
+                        case "Edm.Int32":
+                        case "Edm.Int64":
+                            result[key] = parseInt(entityOrContinuationToken[key]._)
+                            break;
+                        case "Edm.Double":
+                            result[key] = parseFloat(entityOrContinuationToken[key]._)
+                            break;
+                        default:
+                            result[key] = entityOrContinuationToken[key]._;
+                            break;
+                    }
+                } else {
+                    result[key] = entityOrContinuationToken[key];
+                }
+            }
+        }
+        return result;
+    }
+}
+
+export function toAzure<T extends AzureEntity>(entity: T): any;
+export function toAzure(continuation: string): TableService.TableContinuationToken;
+export function toAzure<T extends AzureEntity>(entityOrContinuation: T | string): any | TableService.TableContinuationToken {
+    if (!entityOrContinuation) {
+        return null;
+    }
+    if (isString(entityOrContinuation)) {
+        return fromBase64<TableService.TableContinuationToken>(entityOrContinuation);
+    } else {
+        const entity: any = {
+            ".metadata": entityOrContinuation[".metadata"]
+        };
+        for (const key in entityOrContinuation) {
+            if (key != ".metadata" && !Reflect.getMetadata(azureIgnoreMetadataKey, entityOrContinuation, key)) {
+                entity[key] = {
+                    _: entityOrContinuation[key],
+                    $: Reflect.getMetadata(azureEdmMetadataKey, entityOrContinuation, key)
+                };
+            }
+        }
+        return entity;
+    }
 }
 
 export class AzureEntity {
@@ -35,9 +104,7 @@ export class AzureQueryResult<T extends AzureEntity> {
 
     constructor(azureQueryResult: TableService.QueryEntitiesResult<any>, toT: (e: any) => T) {
         this.items = azureQueryResult.entries.map(toT);
-        this.continuation = !!azureQueryResult.continuationToken
-            ? toBase64(JSON.stringify(azureQueryResult.continuationToken))
-            : null;
+        this.continuation = fromAzure(azureQueryResult.continuationToken);
     }
 
     items: T[];
@@ -50,62 +117,6 @@ export class AzureRepository {
 
     constructor(connectionString: string) {
         this.table = createTableService(connectionString);
-    }
-
-    protected fromAzure<T extends AzureEntity>(entity: any, t: new () => T): T {
-        if (!!entity) {
-            const result = new t();
-            for (const key in entity) {
-                if (entity.hasOwnProperty(key)) {
-                    if (!!entity[key] && entity[key].hasOwnProperty("_")) {
-                        switch (entity[key].$) {
-                            case "Edm.DateTime":
-                                result[key] = new Date(entity[key]._)
-                                break;
-                            case "Edm.Int32":
-                            case "Edm.Int64":
-                                result[key] = parseInt(entity[key]._)
-                                break;
-                            case "Edm.Double":
-                                result[key] = parseFloat(entity[key]._)
-                                break;
-                            default:
-                                result[key] = entity[key]._;
-                                break;
-                        }
-                    } else {
-                        result[key] = entity[key];
-                    }
-                }
-            }
-            return result;
-        } else {
-            return entity; // null | undefined
-        }
-    }
-
-    protected toAzure<T extends AzureEntity>(entity: T): any;
-    protected toAzure(continuationToken: string): TableService.TableContinuationToken;
-    protected toAzure<T extends AzureEntity>(entityOrContinuationToken: T | string): any | TableService.TableContinuationToken {
-        if (!entityOrContinuationToken) {
-            return null;
-        }
-        if (isString(entityOrContinuationToken)) {
-            return JSON.parse(fromBase64(entityOrContinuationToken)) as TableService.TableContinuationToken;
-        } else {
-            const entity: any = {
-                ".metadata": entityOrContinuationToken[".metadata"]
-            };
-            for (const key in entityOrContinuationToken) {
-                if (key != ".metadata" && !Reflect.getMetadata(azureIgnoreMetadataKey, entityOrContinuationToken, key)) {
-                    entity[key] = {
-                        _: entityOrContinuationToken[key],
-                        $: Reflect.getMetadata(azureEdmMetadataKey, entityOrContinuationToken, key)
-                    };
-                }
-            }
-            return entity;
-        }
     }
 
     protected ensureTable(tableName: string): Promise<void> {
@@ -150,15 +161,15 @@ export class AzureRepository {
                             if (err && (response.statusCode != 404 || !!throwIfNotFound)) {
                                 rej(err);
                             } else {
-                                res(this.fromAzure(result, t));
+                                res(fromAzure(result, t));
                             }
                         });
                     } else {
-                        this.table.queryEntities(tableName, partitionKeyOrQuery, this.toAzure(rowKeyOrContinuation), (err, result) => {
+                        this.table.queryEntities(tableName, partitionKeyOrQuery, toAzure(rowKeyOrContinuation), (err, result) => {
                             if (err) {
                                 rej(err);
                             } else {
-                                res(new AzureQueryResult(result, e => this.fromAzure<T>(e, t)));
+                                res(new AzureQueryResult(result, e => fromAzure<T>(e, t)));
                             }
                         });
                     }
@@ -170,7 +181,7 @@ export class AzureRepository {
         return this.ensureTable(tableName)
             .then(() => {
                 return new Promise<void>((res, rej) => {
-                    this.table.insertOrMergeEntity(tableName, this.toAzure(entity), err => {
+                    this.table.insertOrMergeEntity(tableName, toAzure(entity), err => {
                         if (err) {
                             rej(err);
                         } else {

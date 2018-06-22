@@ -22,79 +22,91 @@ function Int32() {
 }
 exports.Int32 = Int32;
 function Double() {
-    return (target, propertyKey) => Reflect.defineMetadata(azureEdmMetadataKey, int64EdmMetadataKey, target, propertyKey);
+    return (target, propertyKey) => Reflect.defineMetadata(azureEdmMetadataKey, doubleEdmMetadataKey, target, propertyKey);
 }
 exports.Double = Double;
+function validateContinuation(continuation) {
+    try {
+        return toAzure(continuation) != null;
+    }
+    catch (e) {
+        return false;
+    }
+}
+exports.validateContinuation = validateContinuation;
+function fromAzure(entityOrContinuationToken, t) {
+    if (!entityOrContinuationToken) {
+        return null;
+    }
+    if (!t) {
+        return common_1.toBase64(entityOrContinuationToken);
+    }
+    else {
+        const result = new t();
+        for (const key in entityOrContinuationToken) {
+            if (entityOrContinuationToken.hasOwnProperty(key)) {
+                if (!!entityOrContinuationToken[key] && entityOrContinuationToken[key].hasOwnProperty("_")) {
+                    switch (entityOrContinuationToken[key].$) {
+                        case "Edm.DateTime":
+                            result[key] = new Date(entityOrContinuationToken[key]._);
+                            break;
+                        case "Edm.Int32":
+                        case "Edm.Int64":
+                            result[key] = parseInt(entityOrContinuationToken[key]._);
+                            break;
+                        case "Edm.Double":
+                            result[key] = parseFloat(entityOrContinuationToken[key]._);
+                            break;
+                        default:
+                            result[key] = entityOrContinuationToken[key]._;
+                            break;
+                    }
+                }
+                else {
+                    result[key] = entityOrContinuationToken[key];
+                }
+            }
+        }
+        return result;
+    }
+}
+exports.fromAzure = fromAzure;
+function toAzure(entityOrContinuation) {
+    if (!entityOrContinuation) {
+        return null;
+    }
+    if (util_1.isString(entityOrContinuation)) {
+        return common_1.fromBase64(entityOrContinuation);
+    }
+    else {
+        const entity = {
+            ".metadata": entityOrContinuation[".metadata"]
+        };
+        for (const key in entityOrContinuation) {
+            if (key != ".metadata" && !Reflect.getMetadata(azureIgnoreMetadataKey, entityOrContinuation, key)) {
+                entity[key] = {
+                    _: entityOrContinuation[key],
+                    $: Reflect.getMetadata(azureEdmMetadataKey, entityOrContinuation, key)
+                };
+            }
+        }
+        return entity;
+    }
+}
+exports.toAzure = toAzure;
 class AzureEntity {
 }
 exports.AzureEntity = AzureEntity;
 class AzureQueryResult {
     constructor(azureQueryResult, toT) {
         this.items = azureQueryResult.entries.map(toT);
-        this.continuation = !!azureQueryResult.continuationToken
-            ? common_1.toBase64(JSON.stringify(azureQueryResult.continuationToken))
-            : null;
+        this.continuation = fromAzure(azureQueryResult.continuationToken);
     }
 }
 exports.AzureQueryResult = AzureQueryResult;
 class AzureRepository {
     constructor(connectionString) {
         this.table = azure_storage_1.createTableService(connectionString);
-    }
-    fromAzure(entity, t) {
-        if (!!entity) {
-            const result = new t();
-            for (const key in entity) {
-                if (entity.hasOwnProperty(key)) {
-                    if (!!entity[key] && entity[key].hasOwnProperty("_")) {
-                        switch (entity[key].$) {
-                            case "Edm.DateTime":
-                                result[key] = new Date(entity[key]._);
-                                break;
-                            case "Edm.Int32":
-                            case "Edm.Int64":
-                                result[key] = parseInt(entity[key]._);
-                                break;
-                            case "Edm.Double":
-                                result[key] = parseFloat(entity[key]._);
-                                break;
-                            default:
-                                result[key] = entity[key]._;
-                                break;
-                        }
-                    }
-                    else {
-                        result[key] = entity[key];
-                    }
-                }
-            }
-            return result;
-        }
-        else {
-            return entity; // null | undefined
-        }
-    }
-    toAzure(entityOrContinuationToken) {
-        if (!entityOrContinuationToken) {
-            return null;
-        }
-        if (util_1.isString(entityOrContinuationToken)) {
-            return JSON.parse(common_1.fromBase64(entityOrContinuationToken));
-        }
-        else {
-            const entity = {
-                ".metadata": entityOrContinuationToken[".metadata"]
-            };
-            for (const key in entityOrContinuationToken) {
-                if (key != ".metadata" && !Reflect.getMetadata(azureIgnoreMetadataKey, entityOrContinuationToken, key)) {
-                    entity[key] = {
-                        _: entityOrContinuationToken[key],
-                        $: Reflect.getMetadata(azureEdmMetadataKey, entityOrContinuationToken, key)
-                    };
-                }
-            }
-            return entity;
-        }
     }
     ensureTable(tableName) {
         return new Promise((res, rej) => {
@@ -137,17 +149,17 @@ class AzureRepository {
                             rej(err);
                         }
                         else {
-                            res(this.fromAzure(result, t));
+                            res(fromAzure(result, t));
                         }
                     });
                 }
                 else {
-                    this.table.queryEntities(tableName, partitionKeyOrQuery, this.toAzure(rowKeyOrContinuation), (err, result) => {
+                    this.table.queryEntities(tableName, partitionKeyOrQuery, toAzure(rowKeyOrContinuation), (err, result) => {
                         if (err) {
                             rej(err);
                         }
                         else {
-                            res(new AzureQueryResult(result, e => this.fromAzure(e, t)));
+                            res(new AzureQueryResult(result, e => fromAzure(e, t)));
                         }
                     });
                 }
@@ -158,7 +170,7 @@ class AzureRepository {
         return this.ensureTable(tableName)
             .then(() => {
             return new Promise((res, rej) => {
-                this.table.insertOrMergeEntity(tableName, this.toAzure(entity), err => {
+                this.table.insertOrMergeEntity(tableName, toAzure(entity), err => {
                     if (err) {
                         rej(err);
                     }

@@ -58,7 +58,7 @@ __decorate([
 exports.OperationByExpiryTimeEntity = OperationByExpiryTimeEntity;
 class OperationRepository extends queries_1.AzureRepository {
     constructor(settings) {
-        super(settings.EosApi.DataConnectionString);
+        super(settings.EosJob.DataConnectionString);
         this.settings = settings;
         this.operationTableName = "EosOperations";
         this.operationByTxIdTableName = "EosOperationsByTxId";
