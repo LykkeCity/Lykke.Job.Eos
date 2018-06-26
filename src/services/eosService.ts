@@ -2,7 +2,7 @@ import { Settings, ADDRESS_SEPARATOR, isoUTC } from "../common";
 import { LogService, LogLevel } from "./logService";
 import { AssetRepository } from "../domain/assets";
 import { OperationRepository } from "../domain/operations";
-import { ParamsRepository, Params } from "../domain/params";
+import { ParamsRepository, ParamsEntity } from "../domain/params";
 import { BalanceRepository } from "../domain/balances";
 import { HistoryRepository } from "../domain/history";
 
@@ -65,21 +65,17 @@ export class EosService {
      */
     async handleActions(): Promise<void> {
         const assets = await this.assetRepository.all();
-        let params = await this.paramsRepository.get();
+        const params = await this.paramsRepository.get();
 
-        if (!params) {
-            params = new Params();
-            params.LastProcessedBlockTimestamp = new Date(0);
-            params.NextActionSequence = 0;
-        }
-
-        let last_irreversible_block = 0;
+        let nextActionSequence = (params && params.NextActionSequence) || 0;
+        let lastIrreversibleBlockTime = (params && params.LastIrreversibleBlockTime) || new Date(0);
+        let lastIrreversibleBlock = 0;
 
         while (true) {
-            const actionResult: ActionsResult = await this.eos.getActions(this.settings.EosJob.HotWalletAccount, params.NextActionSequence, 0);
+            const actionResult: ActionsResult = await this.eos.getActions(this.settings.EosJob.HotWalletAccount, nextActionSequence, 0);
             const action = actionResult.actions[0];
 
-            last_irreversible_block = actionResult.last_irreversible_block;
+            lastIrreversibleBlock = actionResult.last_irreversible_block;
 
             if (!!action && action.block_num <= actionResult.last_irreversible_block) {
 
@@ -89,8 +85,8 @@ export class EosService {
 
                 if (!!transfer) {
                     // set operation state to completed, if any
-                    const operationId = await this.operationRepository.updateCompleted(action.action_trace.trx_id,
-                        new Date(), isoUTC(action.block_time), action.block_num);
+                    const operationId = await this.operationRepository.updateCompletion(action.action_trace.trx_id,
+                        isoUTC(action.block_time), action.block_num);
 
                     // get amount and asset
                     const parts = transfer.quantity.split(" ", 2);
@@ -119,21 +115,26 @@ export class EosService {
                     await this.logInfo("Not a transfer", action.action_trace.act.name);
                 }
 
-                params.NextActionSequence++;
-                await this.paramsRepository.upsert(params);
+                // increment counter to fetch next action
+                nextActionSequence++;
 
+                // update state
+                await this.paramsRepository.upsert({
+                    nextActionSequence: nextActionSequence
+                });
             } else {
                 break;
             }
         }
 
         // update expired operations (mark as failed)
-        const block: Block = await this.eos.getBlock(last_irreversible_block);
+        const block = await this.eos.getBlock(lastIrreversibleBlock) as Block;
         const blockTime = isoUTC(block.timestamp);
-        await this.operationRepository.updateExpired(params.LastProcessedBlockTimestamp, blockTime);
+        await this.operationRepository.handleExpiration(lastIrreversibleBlockTime, blockTime);
 
         // update state
-        params.LastProcessedBlockTimestamp = blockTime;
-        await this.paramsRepository.upsert(params);
+        await this.paramsRepository.upsert({
+            lastIrreversibleBlockTime: blockTime
+        });
     }
 }

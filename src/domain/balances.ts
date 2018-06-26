@@ -1,8 +1,8 @@
-import { Asset } from "./assets";
+import { AssetEntity } from "./assets";
 import { Settings } from "../common";
 import { AzureEntity, AzureRepository, Ignore, Double } from "./queries";
 
-export class Balance extends AzureEntity {
+export class BalanceEntity extends AzureEntity {
 
     @Ignore()
     get Address(): string {
@@ -32,13 +32,13 @@ export class BalanceRepository extends AzureRepository {
      * @param asset Asset
      * @param affix Amount to add (if positive) or subtract (if negative)
      */
-    async upsert(address: string, asset: Asset, affix: number): Promise<number> {
-        let entity = await this.select(Balance, this.tableName, address, asset.AssetId);
+    async upsert(address: string, asset: AssetEntity, affix: number): Promise<number> {
+        let entity = await this.select(BalanceEntity, this.tableName, address, asset.AssetId);
 
         if (entity) {
             entity.Balance += affix;
         } else {
-            entity = new Balance();
+            entity = new BalanceEntity();
             entity.PartitionKey = address;
             entity.RowKey = asset.AssetId;
             entity.Balance = affix;

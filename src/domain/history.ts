@@ -1,4 +1,4 @@
-import { Asset } from "./assets";
+import { AssetEntity } from "./assets";
 import { Settings } from "../common";
 import { AzureEntity, AzureRepository, Ignore, Int64, Double } from "./queries";
 
@@ -33,7 +33,7 @@ export class HistoryRepository extends AzureRepository {
         super(settings.EosJob.DataConnectionString);
     }
 
-    async upsert(from: string, to: string, amount: number, asset: Asset, blockNum: number, txId: string, actionId: string, operationId?: string): Promise<void> {
+    async upsert(from: string, to: string, amount: number, asset: AssetEntity, blockNum: number, txId: string, actionId: string, operationId?: string): Promise<void> {
 
         const historyByTxIdEntity = new HistoryByTxIdEntity();
         historyByTxIdEntity.PartitionKey = txId;

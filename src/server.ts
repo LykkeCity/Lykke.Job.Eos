@@ -25,7 +25,7 @@ loadSettings()
                 // log error
 
                 await log.write(err.status && err.status < 500 ? LogLevel.warning : LogLevel.error,
-                    "Lykke.Job.Eos", ctx.url, err.message, undefined, err.name, err.stack);
+                    "api", ctx.url, err.message, undefined, err.name, err.stack);
 
                 // return error info to client
 
@@ -62,7 +62,7 @@ loadSettings()
             try {
                 await eos.handleActions();
             } catch (err) {
-                await log.write(LogLevel.error, "Lykke.Job.Eos", "HandleActions", err.message, undefined, err.name, err.stack);
+                await log.write(LogLevel.error, EosService.name, eos.handleActions.name, err.message, undefined, err.name, err.stack);
             }
         }, settings.EosJob.Interval, { stopOnError: false });
     })

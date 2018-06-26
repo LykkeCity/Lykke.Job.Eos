@@ -18,12 +18,18 @@ export class OperationEntity extends AzureEntity {
         return this.PartitionKey;
     }
 
-    CompletedUtc?: Date;
-    MinedUtc?: Date;
-    FailedUtc?: Date;
+    CompletionTime: Date;
+    BlockTime: Date;
 
     @Int64()
-    BlockNum?: number;
+    Block: number;
+
+    FailTime: Date;
+    Error: string;
+
+    isNotCompletedOrFailed(): boolean {
+        return !this.CompletionTime && !this.FailTime;
+    }
 }
 
 export class OperationByExpiryTimeEntity extends AzureEntity {
@@ -48,16 +54,16 @@ export class OperationRepository extends AzureRepository {
         super(settings.EosJob.DataConnectionString);
     }
 
-    async updateCompleted(trxId: string, completedUtc: Date, minedUtc: Date, blockNum: number): Promise<string> {
-        const operationByTxIdEntity = await this.select(OperationByTxIdEntity, this.operationByTxIdTableName, trxId, "");
+    async updateCompletion(txId: string, blockTime: Date, block: number): Promise<string> {
+        const operationByTxIdEntity = await this.select(OperationByTxIdEntity, this.operationByTxIdTableName, txId, "");
 
         if (!!operationByTxIdEntity) {
             const operationEntity = new OperationEntity();
             operationEntity.PartitionKey = operationByTxIdEntity.OperationId;
             operationEntity.RowKey = "";
-            operationEntity.CompletedUtc = completedUtc;
-            operationEntity.MinedUtc = minedUtc;
-            operationEntity.BlockNum = blockNum;
+            operationEntity.CompletionTime = new Date();
+            operationEntity.BlockTime = blockTime;
+            operationEntity.Block = block;
 
             await this.insertOrMerge(this.operationTableName, operationEntity);
         }
@@ -65,28 +71,29 @@ export class OperationRepository extends AzureRepository {
         return operationByTxIdEntity && operationByTxIdEntity.OperationId;
     }
 
-    async updateFailed(operationId: string, failedUtc: Date, error: string): Promise<void> {
+    async updateFail(operationId: string, error: string) {
         const operationEntity = new OperationEntity();
         operationEntity.PartitionKey = operationId;
         operationEntity.RowKey = "";
-        operationEntity.FailedUtc = failedUtc;
+        operationEntity.FailTime = new Date();
         operationEntity.Error = error;
 
         await this.insertOrMerge(this.operationTableName, operationEntity);
     }
 
-    async updateExpired(from: Date, to: Date) {
+    async handleExpiration(from: Date, to: Date) {
         let continuation: string = null;
 
+        const query = new TableQuery()
+            .where("PartitionKey > ? and PartitionKey <= ?", from.toISOString(), to.toISOString());
+
         do {
-            const query: TableQuery = new TableQuery().where("PartitionKey > ? and PartitionKey <= ?", from.toISOString(), to.toISOString());
             const chunk = await this.select(OperationByExpiryTimeEntity, this.operationByExpiryTimeTableName, query, continuation);
 
             for (const entity of chunk.items) {
                 const operation = await this.select(OperationEntity, this.operationTableName, entity.OperationId, "")
-
-                if (!!operation && !operation.CompletedUtc && !operation.FailedUtc) {
-                    await this.updateFailed(entity.OperationId, entity.ExpiryTime, "Transaction expired");
+                if (!!operation && operation.isNotCompletedOrFailed()) {
+                    await this.updateFail(entity.OperationId, "Transaction expired");
                 }
             }
 
