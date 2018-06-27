@@ -59,3 +59,6 @@ jspm_packages/
 
 # VS Code misc files
 .vscode/*.json
+
+# App Settings
+appSettings.*.json
