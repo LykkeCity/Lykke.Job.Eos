@@ -1,6 +1,6 @@
-import { TableService, TableQuery, TableUtilities, createTableService } from "azure-storage";
+import { TableService, TableQuery, TableUtilities, createTableService, TableBatch } from "azure-storage";
 import { fromBase64, toBase64 } from "../common";
-import { isString } from "util";
+import { isString, isArray } from "util";
 import "reflect-metadata";
 
 const azureEdmMetadataKey = Symbol("Azure.Edm");
@@ -177,18 +177,41 @@ export class AzureRepository {
             });
     }
 
-    protected insertOrMerge<T extends AzureEntity>(tableName: string, entity: T): Promise<void> {
+    protected insertOrMerge<T extends AzureEntity>(tableName: string, entities: T[]): Promise<void[]>;
+    protected insertOrMerge<T extends AzureEntity>(tableName: string, entity: T): Promise<void>;
+    protected insertOrMerge<T extends AzureEntity>(tableName: string, entityOrArray: T[] | T): Promise<void[] | void> {
         return this.ensureTable(tableName)
             .then(() => {
-                return new Promise<void>((res, rej) => {
-                    this.table.insertOrMergeEntity(tableName, toAzure(entity), err => {
-                        if (err) {
-                            rej(err);
-                        } else {
-                            res();
-                        }
+                if (isArray(entityOrArray)) {
+                    const batches: Promise<void>[] = [];
+                    const entities = entityOrArray.map(e => toAzure(e));
+                    while (entities.length) {
+                        const batch = entities.splice(0, 100).reduce((batch, entity) => {
+                            batch.insertOrMergeEntity(entity);
+                            return batch;
+                        }, new TableBatch());
+                        batches.push(new Promise<void>((res, rej) => {
+                            this.table.executeBatch(tableName, batch, err => {
+                                if (err) {
+                                    rej(err);
+                                } else {
+                                    res();
+                                }
+                            });
+                        }));
+                    }
+                    return Promise.all(batches).then(() => { });
+                } else {
+                    return new Promise<void>((res, rej) => {
+                        this.table.insertOrMergeEntity(tableName, toAzure(entityOrArray), err => {
+                            if (err) {
+                                rej(err);
+                            } else {
+                                res();
+                            }
+                        });
                     });
-                });
+                }
             });
     }
 

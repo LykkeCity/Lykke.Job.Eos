@@ -1,16 +1,23 @@
-import { AssetEntity } from "./assets";
 import { Settings } from "../common";
 import { AzureEntity, AzureRepository, Ignore, Int64, Double } from "./queries";
+import { TableQuery } from "azure-storage";
 
 export class HistoryEntity extends AzureEntity {
     From: string;
     To: string;
     AssetId: string;
-    TxId: string;
-    OperationId: string;
 
     @Double()
     Amount: number;
+
+    @Int64()
+    AmountInBaseUnit: number;
+
+    Block: number;
+    BlockTime: Date;
+    TxId: string;
+    ActionId: string;
+    OperationId: string;
 }
 
 export class HistoryByTxIdEntity extends AzureEntity {
@@ -21,7 +28,12 @@ export class HistoryByTxIdEntity extends AzureEntity {
     }
 
     @Int64()
-    BlockNum: number;
+    Block: number;
+}
+
+export enum HistoryAddressCategory {
+    From = "From",
+    To = "To"
 }
 
 export class HistoryRepository extends AzureRepository {
@@ -33,29 +45,49 @@ export class HistoryRepository extends AzureRepository {
         super(settings.EosJob.DataConnectionString);
     }
 
-    async upsert(from: string, to: string, amount: number, asset: AssetEntity, blockNum: number, txId: string, actionId: string, operationId?: string): Promise<void> {
+    async upsert(from: string, to: string, assetId: string, amount: number, amountInBaseUnit: number,
+        block: number, blockTime: Date, txId: string, actionId: string, operationId?: string) {
 
         const historyByTxIdEntity = new HistoryByTxIdEntity();
         historyByTxIdEntity.PartitionKey = txId;
         historyByTxIdEntity.RowKey = "";
-        historyByTxIdEntity.BlockNum = blockNum;
+        historyByTxIdEntity.Block = block;
 
         await this.insertOrMerge(this.historyByTxIdTableName, historyByTxIdEntity);
 
         const historyEntity = new HistoryEntity();
-        historyEntity.PartitionKey = `From_${from}`;
-        historyEntity.RowKey = `${blockNum}_${txId}_${actionId}`;
+        historyEntity.PartitionKey = `${HistoryAddressCategory.From}_${from}`;
+        historyEntity.RowKey = `${block}_${txId}_${actionId}`;
         historyEntity.From = from;
         historyEntity.To = to;
         historyEntity.Amount = amount;
-        historyEntity.AssetId = asset.AssetId;
+        historyEntity.AmountInBaseUnit = amountInBaseUnit;
+        historyEntity.AssetId = assetId;
+        historyEntity.Block = block;
+        historyEntity.BlockTime = blockTime;
         historyEntity.TxId = txId;
+        historyEntity.ActionId = actionId;
         historyEntity.OperationId = operationId;
 
         await this.insertOrMerge(this.historyTableName, historyEntity);
 
-        historyEntity.PartitionKey = `To_${to}`;
+        historyEntity.PartitionKey = `${HistoryAddressCategory.To}_${to}`;
 
         await this.insertOrMerge(this.historyTableName, historyEntity);
+    }
+
+    async get(category: HistoryAddressCategory, address: string, take = 100, afterHash: string = null): Promise<HistoryEntity[]> {
+        let query = new TableQuery().top(take);
+
+        if (!!afterHash) {
+            const index = await this.select(HistoryByTxIdEntity, this.historyByTxIdTableName, afterHash, "");
+            if (!!index) {
+                query = new TableQuery()
+                    .where("PartitionKey == ?", `${category}_${address}`)
+                    .and("RowKey > ?", index.Block);
+            }
+        }
+
+        return this.selectAll(async (c) => await this.select(HistoryEntity, this.historyTableName, query, c));
     }
 }

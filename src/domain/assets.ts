@@ -5,16 +5,34 @@ import { isString } from "util";
 
 export class AssetEntity extends AzureEntity {
 
+    /**
+     * Token symbol
+     */
     @Ignore()
     get AssetId(): string {
         return this.PartitionKey;
     }
 
+    /**
+     * Token contract account
+     */
     Address: string;
+
     Name: string;
 
+    /**
+     * Number of digits after the decimal point
+     */
     @Int32()
     Accuracy: number;
+
+    fromBaseUnit(value: number): number {
+        return value / Math.pow(10, this.Accuracy);
+    }
+
+    toBaseUnit(value: number): number {
+        return value * Math.pow(10, this.Accuracy);
+    }
 }
 
 export class AssetRepository extends AzureRepository {
