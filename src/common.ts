@@ -39,7 +39,9 @@ export function fromBase64<T>(str: string): T {
  */
 export class Settings {
     EosJob: {
-        DataConnectionString: string;
+        AzureConnectionString: string;
+        MongoConnectionString: string;
+        MongoDatabase: string;
         LogAdapterUrl: string;
         LogSlackChannels: string[];
         Interval: number;

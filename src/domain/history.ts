@@ -1,5 +1,5 @@
 import { Settings } from "../common";
-import { AzureEntity, AzureRepository, Ignore, Int64, Double } from "./queries";
+import { AzureEntity, AzureRepository, Ignore, Int64, Double } from "./azure";
 import { TableQuery } from "azure-storage";
 
 export class HistoryEntity extends AzureEntity {
@@ -42,7 +42,7 @@ export class HistoryRepository extends AzureRepository {
     private historyByTxIdTableName: string = "EosHistoryByTxId";
 
     constructor(private settings: Settings) {
-        super(settings.EosJob.DataConnectionString);
+        super(settings.EosJob.AzureConnectionString);
     }
 
     async upsert(from: string, to: string, assetId: string, amount: number, amountInBaseUnit: number,
@@ -77,17 +77,17 @@ export class HistoryRepository extends AzureRepository {
     }
 
     async get(category: HistoryAddressCategory, address: string, take = 100, afterHash: string = null): Promise<HistoryEntity[]> {
-        let query = new TableQuery().top(take);
+        let query = new TableQuery()
+            .where("PartitionKey == ?", `${category}_${address}`)
+            .top(take);
 
         if (!!afterHash) {
             const index = await this.select(HistoryByTxIdEntity, this.historyByTxIdTableName, afterHash, "");
             if (!!index) {
-                query = new TableQuery()
-                    .where("PartitionKey == ?", `${category}_${address}`)
-                    .and("RowKey > ?", index.Block);
+                query = query.and("RowKey > ?", index.Block);
             }
         }
 
-        return this.selectAll(async (c) => await this.select(HistoryEntity, this.historyTableName, query, c));
+        return await this.selectAll(async (c) => await this.select(HistoryEntity, this.historyTableName, query, c));
     }
 }

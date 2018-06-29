@@ -63,11 +63,10 @@ export class EosService {
     /**
      * Tracks blockchain actions and updates operations state.
      */
-    async handleActions(): Promise<void> {
+    async handleActions(): Promise<number> {
         const params = await this.paramsRepository.get();
 
         let nextActionSequence = (params && params.NextActionSequence) || 0;
-        let lastIrreversibleBlockTime = (params && params.LastIrreversibleBlockTime) || new Date(0);
         let lastIrreversibleBlock = 0;
 
         while (true) {
@@ -85,17 +84,12 @@ export class EosService {
                 const blockTime = isoUTC(action.block_time);
                 const txId = action.action_trace.trx_id;
                 const actionId = action.action_trace.receipt.act_digest;
-                const operationId: string = null;
 
                 if (!!transfer) {
                     // set operation state to completed, if any
                     const operationId = await this.operationRepository.getOperationIdByTxId(txId);
                     if (!!operationId) {
-                        await this.operationRepository.update(operationId, {
-                            completionTime: new Date(),
-                            blockTime,
-                            block
-                        });
+                        await this.operationRepository.update(operationId, { completionTime: new Date(), blockTime, block });
                     }
 
                     // get amount and asset
@@ -110,14 +104,21 @@ export class EosService {
                             : transfer.to;
 
                         // record history
-                        await this.historyRepository.upsert(transfer.from, to, asset.AssetId, value,
-                            valueInBaseUnit, block, blockTime, txId, actionId, operationId);
+                        await this.historyRepository.upsert(transfer.from, to, asset.AssetId, value, valueInBaseUnit, block, blockTime, txId, actionId, operationId);
                         await this.log(LogLevel.info, "Transfer recorded", transfer);
 
-                        // update balance of deposit wallet
-                        if (transfer.to == this.settings.EosJob.HotWalletAccount && !!transfer.memo) {
-                            const balance = await this.balanceRepository.upsert(to, asset.AssetId, value, valueInBaseUnit);
-                            await this.log(LogLevel.info, "Balance updated", { Address: to, Affix: value, Asset: asset.AssetId, FinalBalance: balance.Amount });
+                        // external operations can affect balances (internal are already accounted)
+                        if (!operationId) {
+                            const balanceChanges = [
+                                { address: transfer.from, affix: -value, affixInBaseUnit: -valueInBaseUnit },
+                                { address: to, affix: value, affixInBaseUnit: valueInBaseUnit }
+                            ];
+                            for (const bc of balanceChanges) {
+                                if (await this.balanceRepository.isObservable(bc.address)) {
+                                    const balance = await this.balanceRepository.modify(bc.address, asset.AssetId, bc.affix, bc.affixInBaseUnit);
+                                    await this.log(LogLevel.info, "Balance updated", { ...bc, ...balance, assetId: asset.AssetId });
+                                }
+                            }
                         }
                     } else {
                         await this.log(LogLevel.warning, "Not tracked token", parts[1]);
@@ -138,14 +139,38 @@ export class EosService {
             }
         }
 
-        // update expired operations (mark as failed)
-        const block = await this.eos.getBlock(lastIrreversibleBlock) as Block;
-        const blockTime = isoUTC(block.timestamp);
-        await this.operationRepository.handleExpiration(lastIrreversibleBlockTime, blockTime);
+        return lastIrreversibleBlock;
+    }
+
+    async handleExpired(lastActionIrreversibleBlockNumber: number) {
+
+        // some actions may come after handleActions() and before handleExpired() calling,
+        // such operations will be wrongly marked as failed if we get last irreversible block from getInfo() here,
+        // that's why we must use last irreversible block from getActions()
+
+        const params = await this.paramsRepository.get();
+        const lastProcessedIrreversibleBlockTime = (params && params.LastProcessedIrreversibleBlockTime) || new Date(0);
+        const lastActionIrreversibleBlock = (await this.eos.getBlock(lastActionIrreversibleBlockNumber)) as Block;
+        const lastActionIrreversibleBlockTime = isoUTC(lastActionIrreversibleBlock.timestamp);
+
+        // mark expired operations as failed, if any
+
+        const presumablyExpired = await this.operationRepository.geOperationIdByExpiryTime(lastProcessedIrreversibleBlockTime, lastActionIrreversibleBlockTime);
+
+        for (let i = 0; i < presumablyExpired.length; i++) {
+            const operation = await this.operationRepository.get(presumablyExpired[i])
+            if (!!operation && operation.isNotCompletedOrFailed()) {
+                await this.operationRepository.update(operation.OperationId, {
+                    failTime: new Date(),
+                    error: "Transaction expired"
+                });
+            }
+        }
 
         // update state
+
         await this.paramsRepository.upsert({
-            lastIrreversibleBlockTime: blockTime
+            lastProcessedIrreversibleBlockTime: lastActionIrreversibleBlockTime
         });
     }
 }

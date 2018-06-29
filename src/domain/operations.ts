@@ -1,6 +1,6 @@
 import { TableQuery, date } from "azure-storage";
 import { Settings } from "../common";
-import { AzureRepository, AzureEntity, Ignore, Int64, Double } from "./queries";
+import { AzureRepository, AzureEntity, Ignore, Int64, Double } from "./azure";
 
 export enum OperationType {
     Single = "Single",
@@ -96,7 +96,7 @@ export class OperationRepository extends AzureRepository {
     private operationByTxIdTableName: string = "EosOperationsByTxId";
 
     constructor(private settings: Settings) {
-        super(settings.EosJob.DataConnectionString);
+        super(settings.EosJob.AzureConnectionString);
     }
 
     async upsert(operationId: string, type: OperationType, assetId: string,
@@ -167,27 +167,12 @@ export class OperationRepository extends AzureRepository {
         }
     }
 
-    async handleExpiration(from: Date, to: Date) {
-        let continuation: string = null;
-
+    async geOperationIdByExpiryTime(from: Date, to: Date): Promise<string[]> {
         const query = new TableQuery()
             .where("PartitionKey > ? and PartitionKey <= ?", from.toISOString(), to.toISOString());
 
-        do {
-            const chunk = await this.select(OperationByExpiryTimeEntity, this.operationByExpiryTimeTableName, query, continuation);
+        const entities = await this.selectAll(async (c) => this.select(OperationByExpiryTimeEntity, this.operationByExpiryTimeTableName, query, c));
 
-            for (const entity of chunk.items) {
-                const operation = await this.select(OperationEntity, this.operationTableName, entity.OperationId, "")
-                if (!!operation && operation.isNotCompletedOrFailed()) {
-                    await this.update(entity.OperationId, {
-                        failTime: new Date(),
-                        error: "Transaction expired"
-                    });
-                }
-            }
-
-            continuation = chunk.continuation;
-
-        } while (!!continuation)
+        return entities.map(e => e.OperationId);
     }
 }

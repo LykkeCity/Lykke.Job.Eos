@@ -131,7 +131,7 @@ export class AzureRepository {
         });
     }
 
-    protected remove(tableName: string, partitionKey: string, rowKey: string): Promise<void> {
+    protected delete(tableName: string, partitionKey: string, rowKey: string): Promise<void> {
         return this.ensureTable(tableName)
             .then(() => {
                 return new Promise<void>((res, rej) => {
@@ -139,14 +139,36 @@ export class AzureRepository {
                         PartitionKey: TableUtilities.entityGenerator.String(partitionKey),
                         RowKey: TableUtilities.entityGenerator.String(rowKey)
                     };
-                    this.table.deleteEntity(tableName, entity, err => {
-                        if (err) {
+                    this.table.deleteEntity(tableName, entity, (err, response) => {
+                        if (err && response.statusCode != 404) {
                             rej(err);
                         } else {
                             res();
                         }
                     })
                 });
+            });
+    }
+
+    deleteAll<T extends AzureEntity>(t: new () => T, tableName: string, query: TableQuery): Promise<void[]> {
+        return this.selectAll(async (c) => await this.select(t, tableName, query, c))
+            .then(list => {
+                const batches: Promise<void>[] = [];
+                while (list.length) {
+                    const batch = new TableBatch();
+                    list.splice(0, 100)
+                        .forEach(e => batch.deleteEntity(toAzure(e)));
+                    batches.push(new Promise<void>((res, rej) => {
+                        this.table.executeBatch(tableName, batch, err => {
+                            if (err) {
+                                rej(err);
+                            } else {
+                                res();
+                            }
+                        });
+                    }));
+                }
+                return Promise.all(batches);
             });
     }
 
@@ -184,12 +206,10 @@ export class AzureRepository {
             .then(() => {
                 if (isArray(entityOrArray)) {
                     const batches: Promise<void>[] = [];
-                    const entities = entityOrArray.map(e => toAzure(e));
-                    while (entities.length) {
-                        const batch = entities.splice(0, 100).reduce((batch, entity) => {
-                            batch.insertOrMergeEntity(entity);
-                            return batch;
-                        }, new TableBatch());
+                    while (entityOrArray.length) {
+                        const batch = new TableBatch();
+                        entityOrArray.splice(0, 100)
+                            .forEach(e => batch.insertOrMergeEntity(toAzure(e)));
                         batches.push(new Promise<void>((res, rej) => {
                             this.table.executeBatch(tableName, batch, err => {
                                 if (err) {

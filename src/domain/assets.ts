@@ -1,6 +1,6 @@
 import { TableQuery } from "azure-storage";
 import { Settings } from "../common";
-import { AzureQueryResult, AzureEntity, AzureRepository, Ignore, Int32 } from "./queries";
+import { AzureQueryResult, AzureEntity, AzureRepository, Ignore, Int32 } from "./azure";
 import { isString } from "util";
 
 export class AssetEntity extends AzureEntity {
@@ -40,7 +40,7 @@ export class AssetRepository extends AzureRepository {
     private tableName: string = "EosAssets";
 
     constructor(private settings: Settings) {
-        super(settings.EosJob.DataConnectionString);
+        super(settings.EosJob.AzureConnectionString);
     }
 
     async get(id: string): Promise<AssetEntity>;

@@ -60,7 +60,8 @@ loadSettings()
 
         interval(async () => {
             try {
-                await eos.handleActions();
+                const lastActionIrreversibleBlockNumber = await eos.handleActions();
+                await eos.handleExpired(lastActionIrreversibleBlockNumber);
             } catch (err) {
                 await log.write(LogLevel.error, EosService.name, eos.handleActions.name, err.message, undefined, err.name, err.stack);
             }
