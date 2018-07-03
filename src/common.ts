@@ -1,8 +1,7 @@
 import axios from "axios";
 import fs from "fs";
 import util from "util";
-
-const pkg = require("../package.json");
+import pkg from "../package.json";
 
 export const APP_NAME = pkg.name.split(".").map((x: string) => `${x.charAt(0).toUpperCase()}${x.slice(1)}`).join(".");
 
