@@ -21,14 +21,14 @@ class OperationEntity extends azure_1.AzureEntity {
     get OperationId() {
         return this.PartitionKey;
     }
-    isNotBuiltOrDeleted() {
-        return !this.DeleteTime && (this.isSent() || this.isFailed());
-    }
-    isSent() {
-        return !!this.SendTime;
+    isCompleted() {
+        return !!this.CompletionTime;
     }
     isFailed() {
         return !!this.FailTime;
+    }
+    isSent() {
+        return !!this.SendTime;
     }
 }
 __decorate([

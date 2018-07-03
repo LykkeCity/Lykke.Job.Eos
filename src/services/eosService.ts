@@ -160,7 +160,7 @@ export class EosService {
 
         for (let i = 0; i < presumablyExpired.length; i++) {
             const operation = await this.operationRepository.get(presumablyExpired[i])
-            if (!!operation && operation.isNotCompletedOrFailed()) {
+            if (!!operation && !operation.isCompleted() && !operation.isFailed()) {
                 const operationId = operation.OperationId;
                 const assetId = operation.AssetId;
 
@@ -173,7 +173,7 @@ export class EosService {
                 // reverse balances changes
                 const actions = await this.operationRepository.getActions(operationId);
                 for (const action of actions) {
-                    for (const address of [action.From, action.To]) {
+                    for (const address of [action.FromAddress, action.ToAddress]) {
                         await this.balanceRepository.update(address, assetId, operationId, { isCancelled: true });
                         await this.log(LogLevel.info, "Balance change cancelled", {
                             address, assetId, operationId

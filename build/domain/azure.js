@@ -25,15 +25,6 @@ function Double() {
     return (target, propertyKey) => Reflect.defineMetadata(azureEdmMetadataKey, doubleEdmMetadataKey, target, propertyKey);
 }
 exports.Double = Double;
-function validateContinuation(continuation) {
-    try {
-        return toAzure(continuation) != null;
-    }
-    catch (e) {
-        return false;
-    }
-}
-exports.validateContinuation = validateContinuation;
 function fromAzure(entityOrContinuationToken, t) {
     if (!entityOrContinuationToken) {
         return null;
@@ -42,7 +33,7 @@ function fromAzure(entityOrContinuationToken, t) {
         return common_1.toBase64(entityOrContinuationToken);
     }
     else {
-        const result = new t();
+        const result = new t(); // cast to "any" type to be able to set properties by name
         for (const key in entityOrContinuationToken) {
             if (entityOrContinuationToken.hasOwnProperty(key)) {
                 if (!!entityOrContinuationToken[key] && entityOrContinuationToken[key].hasOwnProperty("_")) {
@@ -80,7 +71,7 @@ function toAzure(entityOrContinuation) {
     }
     else {
         const entity = {
-            ".metadata": entityOrContinuation[".metadata"]
+            ".metadata": entityOrContinuation[".metadata"] // cast to "any" type to be able to get properties by name
         };
         for (const key in entityOrContinuation) {
             if (key != ".metadata" && !Reflect.getMetadata(azureIgnoreMetadataKey, entityOrContinuation, key)) {
@@ -237,6 +228,14 @@ class AzureRepository {
             items = items.concat(res.items);
         } while (!!continuation);
         return items;
+    }
+    validateContinuation(continuation) {
+        try {
+            return toAzure(continuation) != null;
+        }
+        catch (e) {
+            return false;
+        }
     }
 }
 exports.AzureRepository = AzureRepository;

@@ -37,16 +37,16 @@ export class OperationEntity extends AzureEntity {
     Error: string;
     DeleteTime: Date;
 
-    isNotBuiltOrDeleted(): boolean {
-        return !this.DeleteTime && (this.isSent() || this.isFailed());
-    }
-
-    isSent(): boolean {
-        return !!this.SendTime;
+    isCompleted(): boolean {
+        return !!this.CompletionTime;
     }
 
     isFailed(): boolean {
         return !!this.FailTime;
+    }
+
+    isSent(): boolean {
+        return !!this.SendTime;
     }
 }
 
