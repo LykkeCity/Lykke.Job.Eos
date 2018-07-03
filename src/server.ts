@@ -48,13 +48,11 @@ loadSettings()
                     env: ENV_INFO
                 });
             }
-
-            throw new Error("qwe");
         });
 
         // start http server
 
-        koa.listen(5000);
+        koa.listen(5002);
 
         // start job
 

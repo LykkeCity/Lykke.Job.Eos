@@ -1,63 +1,69 @@
 "use strict";
-var __decorate = (this && this.__decorate) || function (decorators, target, key, desc) {
-    var c = arguments.length, r = c < 3 ? target : desc === null ? desc = Object.getOwnPropertyDescriptor(target, key) : desc, d;
-    if (typeof Reflect === "object" && typeof Reflect.decorate === "function") r = Reflect.decorate(decorators, target, key, desc);
-    else for (var i = decorators.length - 1; i >= 0; i--) if (d = decorators[i]) r = (c < 3 ? d(r) : c > 3 ? d(target, key, r) : d(target, key)) || r;
-    return c > 3 && r && Object.defineProperty(target, key, r), r;
-};
-var __metadata = (this && this.__metadata) || function (k, v) {
-    if (typeof Reflect === "object" && typeof Reflect.metadata === "function") return Reflect.metadata(k, v);
-};
 Object.defineProperty(exports, "__esModule", { value: true });
-const queries_1 = require("./queries");
-class Balance extends queries_1.AzureEntity {
-    get Address() {
-        return this.PartitionKey;
-    }
-    get AssetId() {
-        return this.RowKey;
-    }
+const mongo_1 = require("./mongo");
+const util_1 = require("util");
+class BalanceEntity extends mongo_1.MongoEntity {
 }
-__decorate([
-    queries_1.Ignore(),
-    __metadata("design:type", String),
-    __metadata("design:paramtypes", [])
-], Balance.prototype, "Address", null);
-__decorate([
-    queries_1.Ignore(),
-    __metadata("design:type", String),
-    __metadata("design:paramtypes", [])
-], Balance.prototype, "AssetId", null);
-__decorate([
-    queries_1.Double(),
-    __metadata("design:type", Number)
-], Balance.prototype, "Balance", void 0);
-exports.Balance = Balance;
-class BalanceRepository extends queries_1.AzureRepository {
+exports.BalanceEntity = BalanceEntity;
+class BalanceRepository extends mongo_1.MongoRepository {
     constructor(settings) {
-        super(settings.EosJob.DataConnectionString);
-        this.settings = settings;
-        this.tableName = "EosBalances";
+        super(settings.EosJob.Mongo.ConnectionString, settings.EosJob.Mongo.User, settings.EosJob.Mongo.Password, settings.EosJob.Mongo.Database);
+        this.addressCollectionName = "EosBalanceAddresses";
+        this.balanceCollectionName = "EosBalances";
     }
-    /**
-     * Updates or creates balance record for address.
-     * @param address Address
-     * @param asset Asset
-     * @param affix Amount to add (if positive) or subtract (if negative)
-     */
-    async upsert(address, asset, affix) {
-        let entity = await this.select(Balance, this.tableName, address, asset.AssetId);
-        if (entity) {
-            entity.Balance += affix;
+    async observe(address) {
+        const db = await this.db();
+        await db.collection(this.addressCollectionName)
+            .replaceOne({ _id: address }, { _id: address }, { upsert: true });
+        await db.collection(this.balanceCollectionName)
+            .updateMany({ Address: { $eq: address } }, { $set: { IsObservable: true } });
+    }
+    async isObservable(address) {
+        const db = await this.db();
+        const entity = await db.collection(this.addressCollectionName).findOne({ _id: address });
+        return !!entity;
+    }
+    async remove(address) {
+        const db = await this.db();
+        await db.collection(this.addressCollectionName).deleteOne({ _id: address });
+        await db.collection(this.balanceCollectionName)
+            .updateMany({ Address: { $eq: address } }, { $set: { IsObservable: false } });
+    }
+    async upsert(address, assetId, operationOrTxId, amount, amountInBaseUnit) {
+        const db = await this.db();
+        const id = `${address}_${assetId}_${operationOrTxId}`;
+        const isObservable = await this.isObservable(address);
+        await db.collection(this.balanceCollectionName)
+            .updateOne({ _id: id }, { $set: { _id: id, Address: address, AssetId: assetId, OperationOrTxId: operationOrTxId, Amount: amount, AmountInBaseUnit: amountInBaseUnit, IsObservable: isObservable } }, { upsert: true });
+    }
+    async update(address, assetId, operationOrTxId, params) {
+        const db = await this.db();
+        const id = `${address}_${assetId}_${operationOrTxId}`;
+        await db.collection(this.balanceCollectionName)
+            .updateOne({ _id: id }, { $set: { IsCancelled: params.isCancelled } }, { upsert: true });
+    }
+    async get(addressOrTake, assetIdOrcontinuation) {
+        const db = await this.db();
+        if (util_1.isString(addressOrTake)) {
+            return await db.collection(this.balanceCollectionName)
+                .aggregate([
+                { $match: { Address: addressOrTake, AssetId: assetIdOrcontinuation, IsCancelled: { $ne: true } } },
+                { $group: { _id: { Address: "$Address", AssetId: "$Assetid" }, Amount: { $sum: "$Amount" }, AmountInBaseUnit: { $sum: "$AmountInBaseUnit" } } },
+            ])
+                .next();
         }
         else {
-            entity = new Balance();
-            entity.PartitionKey = address;
-            entity.RowKey = asset.AssetId;
-            entity.Balance = affix;
+            const skip = parseInt(assetIdOrcontinuation) || 0;
+            const entities = await db.collection(this.balanceCollectionName)
+                .aggregate([
+                { $match: { IsCancelled: { $ne: true }, IsObservable: { $eq: true } } },
+                { $group: { _id: { Address: "$Address", AssetId: "$Assetid" }, Amount: { $sum: "$Amount" }, AmountInBaseUnit: { $sum: "$AmountInBaseUnit" } } },
+                { $skip: skip },
+                { $limit: addressOrTake }
+            ])
+                .toArray();
+            return new mongo_1.MongoQueryResult(entities, entities.length < addressOrTake ? null : (skip + addressOrTake).toFixed());
         }
-        await this.insertOrMerge(this.tableName, entity);
-        return entity.Balance;
     }
 }
 exports.BalanceRepository = BalanceRepository;

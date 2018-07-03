@@ -60,9 +60,6 @@ export class EosService {
         this.log = (l, m, c) => this.logService.write(l, EosService.name, this.handleActions.name, m, JSON.stringify(c));
     }
 
-    /**
-     * Tracks blockchain actions and updates operations state.
-     */
     async handleActions(): Promise<number> {
         const params = await this.paramsRepository.get();
 
@@ -77,7 +74,10 @@ export class EosService {
 
             if (!!action && action.block_num <= actionResult.last_irreversible_block) {
 
-                await this.log(LogLevel.info, "Action detected", { Account: this.settings.EosJob.HotWalletAccount, Seq: action.account_action_seq });
+                await this.log(LogLevel.info, "Action detected", {
+                    Account: this.settings.EosJob.HotWalletAccount,
+                    Seq: action.account_action_seq
+                });
 
                 const transfer = action.action_trace.act.name == "transfer" && action.action_trace.act.data;
                 const block = action.block_num;
@@ -98,13 +98,14 @@ export class EosService {
                     const asset = await this.assetRepository.get(parts[1]);
 
                     if (!!asset) {
+                        const assetId = asset.AssetId;
                         const valueInBaseUnit = asset.toBaseUnit(value);
                         const to = !!transfer.memo
                             ? transfer.to + ADDRESS_SEPARATOR + transfer.memo
                             : transfer.to;
 
                         // record history
-                        await this.historyRepository.upsert(transfer.from, to, asset.AssetId, value, valueInBaseUnit, block, blockTime, txId, actionId, operationId);
+                        await this.historyRepository.upsert(transfer.from, to, assetId, value, valueInBaseUnit, block, blockTime, txId, actionId, operationId);
                         await this.log(LogLevel.info, "Transfer recorded", transfer);
 
                         // external operations can affect balances (internal are already accounted)
@@ -114,10 +115,10 @@ export class EosService {
                                 { address: to, affix: value, affixInBaseUnit: valueInBaseUnit }
                             ];
                             for (const bc of balanceChanges) {
-                                if (await this.balanceRepository.isObservable(bc.address)) {
-                                    const balance = await this.balanceRepository.modify(bc.address, asset.AssetId, bc.affix, bc.affixInBaseUnit);
-                                    await this.log(LogLevel.info, "Balance updated", { ...bc, ...balance, assetId: asset.AssetId });
-                                }
+                                await this.balanceRepository.upsert(bc.address, assetId, txId, bc.affix, bc.affixInBaseUnit);
+                                await this.log(LogLevel.info, "Balance change recorded", {
+                                    ...bc, assetId, txId
+                                });
                             }
                         }
                     } else {
@@ -160,10 +161,25 @@ export class EosService {
         for (let i = 0; i < presumablyExpired.length; i++) {
             const operation = await this.operationRepository.get(presumablyExpired[i])
             if (!!operation && operation.isNotCompletedOrFailed()) {
-                await this.operationRepository.update(operation.OperationId, {
+                const operationId = operation.OperationId;
+                const assetId = operation.AssetId;
+
+                // mark operation as failed
+                await this.operationRepository.update(operationId, {
                     failTime: new Date(),
                     error: "Transaction expired"
                 });
+
+                // reverse balances changes
+                const actions = await this.operationRepository.getActions(operationId);
+                for (const action of actions) {
+                    for (const address of [action.From, action.To]) {
+                        await this.balanceRepository.update(address, assetId, operationId, { isCancelled: true });
+                        await this.log(LogLevel.info, "Balance change cancelled", {
+                            address, assetId, operationId
+                        });
+                    }
+                }
             }
         }
 

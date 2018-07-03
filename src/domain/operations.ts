@@ -57,8 +57,8 @@ export class OperationActionEntity extends AzureEntity {
         return this.PartitionKey;
     }
 
-    From: string;
-    To: string;
+    FromAddress: string;
+    ToAddress: string;
 
     @Double()
     Amount: number;
@@ -96,7 +96,7 @@ export class OperationRepository extends AzureRepository {
     private operationByTxIdTableName: string = "EosOperationsByTxId";
 
     constructor(private settings: Settings) {
-        super(settings.EosJob.AzureConnectionString);
+        super(settings.EosJob.Azure.ConnectionString);
     }
 
     async upsert(operationId: string, type: OperationType, assetId: string,
@@ -117,8 +117,8 @@ export class OperationRepository extends AzureRepository {
             const entity = new OperationActionEntity();
             entity.PartitionKey = operationId;
             entity.RowKey = i.toString().padStart(4, "0");
-            entity.From = action.fromAddress;
-            entity.To = action.toAddress;
+            entity.FromAddress = action.fromAddress;
+            entity.ToAddress = action.toAddress;
             entity.Amount = action.amount;
             entity.AmountInBaseUnit = action.amountInBaseUnit;
             return entity;

@@ -22,7 +22,7 @@ common_1.loadSettings()
         catch (err) {
             // TODO: read and parse request body to log as context
             // log error
-            await log.write(err.status && err.status < 500 ? logService_1.LogLevel.warning : logService_1.LogLevel.error, "Lykke.Job.Eos", ctx.url, err.message, undefined, err.name, err.stack);
+            await log.write(err.status && err.status < 500 ? logService_1.LogLevel.warning : logService_1.LogLevel.error, "api", ctx.url, err.message, undefined, err.name, err.stack);
             // return error info to client
             ctx.status = err.status || 500;
             ctx.type = jsonMime;
@@ -42,17 +42,17 @@ common_1.loadSettings()
                 env: common_1.ENV_INFO
             });
         }
-        throw new Error("qwe");
     });
     // start http server
-    koa.listen(5000);
+    koa.listen(5002);
     // start job
     interval_promise_1.default(async () => {
         try {
-            await eos.handleActions();
+            const lastActionIrreversibleBlockNumber = await eos.handleActions();
+            await eos.handleExpired(lastActionIrreversibleBlockNumber);
         }
         catch (err) {
-            await log.write(logService_1.LogLevel.error, "Lykke.Job.Eos", "HandleActions", err.message, undefined, err.name, err.stack);
+            await log.write(logService_1.LogLevel.error, eosService_1.EosService.name, eos.handleActions.name, err.message, undefined, err.name, err.stack);
         }
     }, settings.EosJob.Interval, { stopOnError: false });
 })
