@@ -62,3 +62,6 @@ jspm_packages/
 
 # App Settings
 appSettings.*.json
+
+# Build artifacts
+build

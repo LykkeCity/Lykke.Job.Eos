@@ -52,7 +52,7 @@ loadSettings()
 
         // start http server
 
-        koa.listen(5002);
+        koa.listen(5000);
 
         // start job
 
