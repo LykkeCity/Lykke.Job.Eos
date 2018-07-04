@@ -27,6 +27,6 @@ export abstract class MongoRepository {
 }
 
 export class MongoQueryResult<T> {
-    constructor(public items: T[], continuation: string) {
+    constructor(public items: T[], public continuation: string) {
     }
 }

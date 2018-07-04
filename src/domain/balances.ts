@@ -102,4 +102,8 @@ export class BalanceRepository extends MongoRepository {
             return new MongoQueryResult(entities, entities.length < addressOrTake ? null : (skip + addressOrTake).toFixed());
         }
     }
+
+    validateContinuation(continuation: string): boolean {
+        return !continuation || !Number.isNaN(parseInt(continuation));
+    }
 }
