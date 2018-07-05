@@ -4,7 +4,7 @@ import util from "util";
 
 const pkg = require("../package.json");
 
-export const APP_NAME = pkg.name.split(".").map((x: string) => `${x.charAt(0).toUpperCase()}${x.slice(1)}`).join(".");
+export const APP_NAME = pkg.name;
 
 export const APP_VERSION = pkg.version;
 
