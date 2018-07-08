@@ -1,5 +1,5 @@
 {
-  "name": "lykke.job.eos",
+  "name": "Lykke.Job.Eos",
   "version": "1.0.0",
   "description": "Lykke adapter to EOS.IO blockchain, periodical tasks",
   "main": "./build/server.js",
