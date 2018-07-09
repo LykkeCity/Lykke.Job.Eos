@@ -6,6 +6,7 @@ import { isString } from "util";
 export class BalanceEntity extends MongoEntity<{ Address: string, AssetId: string }> {
     Amount: number;
     AmountInBaseUnit: number;
+    Block: number;
 }
 
 export class BalanceRepository extends MongoRepository {
@@ -54,14 +55,14 @@ export class BalanceRepository extends MongoRepository {
             );
     }
 
-    async upsert(address: string, assetId: string, operationOrTxId: string, amount: number, amountInBaseUnit: number) {
+    async upsert(address: string, assetId: string, operationOrTxId: string, amount: number, amountInBaseUnit: number, block: number) {
         const db = await this.db();
         const id = `${address}_${assetId}_${operationOrTxId}`;
         const isObservable = await this.isObservable(address);
         await db.collection(this.balanceCollectionName)
             .updateOne(
                 { _id: id },
-                { $set: { _id: id, Address: address, AssetId: assetId, OperationOrTxId: operationOrTxId, Amount: amount, AmountInBaseUnit: amountInBaseUnit, IsObservable: isObservable } },
+                { $set: { _id: id, Address: address, AssetId: assetId, OperationOrTxId: operationOrTxId, Amount: amount, AmountInBaseUnit: amountInBaseUnit, Block: block, IsObservable: isObservable } },
                 { upsert: true }
             );
     }
@@ -85,7 +86,7 @@ export class BalanceRepository extends MongoRepository {
             return await db.collection<BalanceEntity>(this.balanceCollectionName)
                 .aggregate([
                     { $match: { Address: addressOrTake, AssetId: assetIdOrcontinuation, IsCancelled: { $ne: true } } },
-                    { $group: { _id: { Address: "$Address", AssetId: "$Assetid" }, Amount: { $sum: "$Amount" }, AmountInBaseUnit: { $sum: "$AmountInBaseUnit" } } },
+                    { $group: { _id: { Address: "$Address", AssetId: "$Assetid" }, Amount: { $sum: "$Amount" }, AmountInBaseUnit: { $sum: "$AmountInBaseUnit" }, Block: { $max: "$Block" } } },
                 ])
                 .next();
         } else {
@@ -93,7 +94,8 @@ export class BalanceRepository extends MongoRepository {
             const entities = await db.collection<BalanceEntity>(this.balanceCollectionName)
                 .aggregate([
                     { $match: { IsCancelled: { $ne: true }, IsObservable: { $eq: true } } },
-                    { $group: { _id: { Address: "$Address", AssetId: "$Assetid" }, Amount: { $sum: "$Amount" }, AmountInBaseUnit: { $sum: "$AmountInBaseUnit" } } },
+                    { $group: { _id: { Address: "$Address", AssetId: "$Assetid" }, Amount: { $sum: "$Amount" }, AmountInBaseUnit: { $sum: "$AmountInBaseUnit" }, Block: { $max: "$Block" } } },
+                    // { $match: { Amount: { $gt: 0 } } }, // CosmosDB doesn't suppport multiple $match-es in public preview version
                     { $skip: skip },
                     { $limit: addressOrTake }
                 ])

@@ -80,7 +80,7 @@ export class EosService {
                 });
 
                 const transfer = action.action_trace.act.name == "transfer" && action.action_trace.act.data;
-                const block = action.block_num;
+                const block = action.block_num * 10;
                 const blockTime = isoUTC(action.block_time);
                 const txId = action.action_trace.trx_id;
                 const actionId = action.action_trace.receipt.act_digest;
@@ -115,7 +115,7 @@ export class EosService {
                                 { address: to, affix: value, affixInBaseUnit: valueInBaseUnit }
                             ];
                             for (const bc of balanceChanges) {
-                                await this.balanceRepository.upsert(bc.address, assetId, txId, bc.affix, bc.affixInBaseUnit);
+                                await this.balanceRepository.upsert(bc.address, assetId, txId, bc.affix, bc.affixInBaseUnit, block);
                                 await this.log(LogLevel.info, "Balance change recorded", {
                                     ...bc, assetId, txId
                                 });

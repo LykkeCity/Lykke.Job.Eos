@@ -20,7 +20,8 @@ loadSettings()
                 await next();
             } catch (err) {
 
-                // TODO: read and parse request body to log as context
+                // In case of single endpoint (GET /api/isalive) we don't need extended error handling.
+                // In other cases we might want to log request/response body(ies) as context.
 
                 // log error
 
