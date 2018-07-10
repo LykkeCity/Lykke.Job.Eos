@@ -46,6 +46,7 @@ export class AssetRepository extends AzureRepository {
     async upsert(assetId: string, address: string, name: string, accuracy: number) {
         const entity = new AssetEntity();
         entity.PartitionKey = assetId;
+        entity.RowKey = "";
         entity.Address = address;
         entity.Name = name;
         entity.Accuracy = accuracy;
