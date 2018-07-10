@@ -106,6 +106,6 @@ export class BalanceRepository extends MongoRepository {
     }
 
     validateContinuation(continuation: string): boolean {
-        return !continuation || !Number.isNaN(parseInt(continuation));
+        return !continuation || (!Number.isNaN(parseInt(continuation)) && /^\d+$/.test(continuation));
     }
 }
