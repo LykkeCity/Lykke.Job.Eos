@@ -245,7 +245,7 @@ export class AzureRepository {
 
     validateContinuation(continuation: string) {
         try {
-            return toAzure(continuation) != null;
+            return !continuation || toAzure(continuation) != null;
         } catch (e) {
             return false;
         }
