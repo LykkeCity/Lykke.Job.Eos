@@ -1,7 +1,7 @@
 import { Settings, ADDRESS_SEPARATOR, isoUTC } from "../common";
 import { LogService, LogLevel } from "./logService";
 import { AssetRepository } from "../domain/assets";
-import { OperationRepository } from "../domain/operations";
+import { OperationRepository, ErrorCode } from "../domain/operations";
 import { ParamsRepository, ParamsEntity } from "../domain/params";
 import { BalanceRepository } from "../domain/balances";
 import { HistoryRepository } from "../domain/history";
@@ -167,7 +167,8 @@ export class EosService {
                 // mark operation as failed
                 await this.operationRepository.update(operationId, {
                     failTime: new Date(),
-                    error: "Transaction expired"
+                    error: "Transaction expired",
+                    errorCode: ErrorCode.buildingShouldBeRepeated
                 });
 
                 // reverse balances changes

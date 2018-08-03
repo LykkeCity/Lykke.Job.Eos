@@ -14,7 +14,7 @@
     "@types/node": "^10.5.1",
     "axios": "^0.18.0",
     "azure-storage": "^2.10.0",
-    "eosjs": "^15.0.3",
+    "eosjs": "^16.0.0",
     "interval-promise": "^1.2.0",
     "koa": "^2.5.1",
     "mongodb": "^3.1.0",
