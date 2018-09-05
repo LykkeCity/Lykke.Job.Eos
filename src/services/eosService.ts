@@ -86,30 +86,57 @@ export class EosService {
                 const actionId = action.action_trace.receipt.act_digest;
 
                 if (!!transfer) {
-                    // set operation state to completed, if any
                     const operationId = await this.operationRepository.getOperationIdByTxId(txId);
                     if (!!operationId) {
+
+                        // this is our operation, so use our data 
+                        // to record balance changes and history
+
+                        const operationActions = await this.operationRepository.getActions(operationId);
+                        const operation = await this.operationRepository.get(operationId);
+
+                        for (const action of operationActions) {
+                            // record balance changes
+                            const balanceChanges = [
+                                { address: action.FromAddress, affix: -action.Amount, affixInBaseUnit: -action.AmountInBaseUnit },
+                                { address: action.ToAddress, affix: action.Amount, affixInBaseUnit: action.AmountInBaseUnit }
+                            ];
+                            for (const bc of balanceChanges) {
+                                await this.balanceRepository.upsert(bc.address, operation.AssetId, operationId, bc.affix, bc.affixInBaseUnit, block);
+                                await this.log(LogLevel.info, "Balance change recorded", {
+                                    ...bc, assetId: operation.AssetId, txId
+                                });
+                            }
+
+                            // upsert history of operation action
+                            await this.historyRepository.upsert(action.FromAddress, action.ToAddress, operation.AssetId, action.Amount, action.AmountInBaseUnit,
+                                block, blockTime, txId, action.RowKey, operationId);
+                        }
+
+                        // set operation state to completed
                         await this.operationRepository.update(operationId, { completionTime: new Date(), blockTime, block });
-                    }
+                    } else {
 
-                    // get amount and asset
-                    const parts = transfer.quantity.split(" ", 2);
-                    const value = parseFloat(parts[0]);
-                    const asset = await this.assetRepository.get(parts[1]);
+                        // this is external transaction, so use blockchain 
+                        // data to record balance changes and history
 
-                    if (!!asset) {
-                        const assetId = asset.AssetId;
-                        const valueInBaseUnit = asset.toBaseUnit(value);
-                        const to = !!transfer.memo
-                            ? transfer.to + ADDRESS_SEPARATOR + transfer.memo
-                            : transfer.to;
+                        // get amount and asset
+                        const parts = transfer.quantity.split(" ", 2);
+                        const value = parseFloat(parts[0]);
+                        const asset = await this.assetRepository.get(parts[1]);
 
-                        // record history
-                        await this.historyRepository.upsert(transfer.from, to, assetId, value, valueInBaseUnit, block, blockTime, txId, actionId, operationId);
-                        await this.log(LogLevel.info, "Transfer recorded", transfer);
+                        if (!!asset) {
+                            const assetId = asset.AssetId;
+                            const valueInBaseUnit = asset.toBaseUnit(value);
+                            const to = !!transfer.memo
+                                ? transfer.to + ADDRESS_SEPARATOR + transfer.memo
+                                : transfer.to;
 
-                        // external operations can affect balances (internal are already accounted)
-                        if (!operationId) {
+                            // record history
+                            await this.historyRepository.upsert(transfer.from, to, assetId, value, valueInBaseUnit, block, blockTime, txId, actionId, operationId);
+                            await this.log(LogLevel.info, "Transfer recorded", transfer);
+
+                            // record balance changes
                             const balanceChanges = [
                                 { address: transfer.from, affix: -value, affixInBaseUnit: -valueInBaseUnit },
                                 { address: to, affix: value, affixInBaseUnit: valueInBaseUnit }
@@ -119,10 +146,10 @@ export class EosService {
                                 await this.log(LogLevel.info, "Balance change recorded", {
                                     ...bc, assetId, txId
                                 });
-                            }
+                            }  
+                        } else {
+                            await this.log(LogLevel.warning, "Not tracked token", parts[1]);
                         }
-                    } else {
-                        await this.log(LogLevel.warning, "Not tracked token", parts[1]);
                     }
                 } else {
                     await this.log(LogLevel.warning, "Not a transfer", action.action_trace.act.name);
