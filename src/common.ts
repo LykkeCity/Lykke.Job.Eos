@@ -86,7 +86,7 @@ export function startAppInsights() {
 
     // init with default configuration
     appInsights.setup()
-        .setAutoDependencyCorrelation(true)
+        .setAutoDependencyCorrelation(false)
         .setAutoCollectRequests(true)
         .setAutoCollectPerformance(true)
         .setAutoCollectExceptions(true)
