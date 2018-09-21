@@ -1,10 +1,12 @@
 import Koa from "koa";
 import interval from "interval-promise"
-import { loadSettings, Settings, APP_NAME, APP_VERSION, ENV_INFO } from "./common";
+import { loadSettings, APP_NAME, APP_VERSION, ENV_INFO, startAppInsights } from "./common";
 import { LogService, LogLevel } from "./services/logService";
 import { EosService } from "./services/eosService";
 
 const jsonMime = "application/json; charset=utf-8";
+
+startAppInsights();
 
 loadSettings()
     .then(settings => {
