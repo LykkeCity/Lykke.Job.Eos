@@ -188,11 +188,7 @@ export class EosService {
         for (let i = 0; i < presumablyExpired.length; i++) {
             const operation = await this.operationRepository.get(presumablyExpired[i])
             if (!!operation && !operation.isCompleted() && !operation.isFailed()) {
-                const operationId = operation.OperationId;
-                const assetId = operation.AssetId;
-
-                // mark operation as failed
-                await this.operationRepository.update(operationId, {
+                await this.operationRepository.update(operation.OperationId, {
                     errorCode: ErrorCode.buildingShouldBeRepeated,
                     error: "Transaction expired",
                     failTime: new Date(),
