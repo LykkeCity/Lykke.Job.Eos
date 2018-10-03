@@ -109,7 +109,7 @@ export class OperationRepository extends AzureRepository {
 
     async upsert(operationId: string, type: OperationType, assetId: string,
         actions: { fromAddress: string, toAddress: string, amount: number, amountInBaseUnit: number }[],
-        expiryTime: Date) {
+        expiryTime?: Date) {
 
         const operationEntity = new OperationEntity();
         operationEntity.PartitionKey = operationId;
