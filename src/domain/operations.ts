@@ -132,13 +132,15 @@ export class OperationRepository extends AzureRepository {
             return entity;
         });
 
-        const operationByExpiryTimeEntity = new OperationByExpiryTimeEntity();
-        operationByExpiryTimeEntity.PartitionKey = expiryTime.toISOString();
-        operationByExpiryTimeEntity.RowKey = operationId;
-
         await this.insertOrMerge(this.operationTableName, operationEntity);
         await this.insertOrMerge(this.operationActionTableName, operationActionEntities);
-        await this.insertOrMerge(this.operationByExpiryTimeTableName, operationByExpiryTimeEntity);
+
+        if (!!expiryTime) {
+            const operationByExpiryTimeEntity = new OperationByExpiryTimeEntity();
+            operationByExpiryTimeEntity.PartitionKey = expiryTime.toISOString();
+            operationByExpiryTimeEntity.RowKey = operationId;
+            await this.insertOrMerge(this.operationByExpiryTimeTableName, operationByExpiryTimeEntity);
+        }
     }
 
     async update(operationId: string,

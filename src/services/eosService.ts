@@ -193,21 +193,10 @@ export class EosService {
 
                 // mark operation as failed
                 await this.operationRepository.update(operationId, {
-                    failTime: new Date(),
+                    errorCode: ErrorCode.buildingShouldBeRepeated,
                     error: "Transaction expired",
-                    errorCode: ErrorCode.buildingShouldBeRepeated
+                    failTime: new Date(),
                 });
-
-                // reverse balances changes
-                const actions = await this.operationRepository.getActions(operationId);
-                for (const action of actions) {
-                    for (const address of [action.FromAddress, action.ToAddress]) {
-                        await this.balanceRepository.update(address, assetId, operationId, { isCancelled: true });
-                        await this.log(LogLevel.info, "Balance change cancelled", {
-                            address, assetId, operationId
-                        });
-                    }
-                }
             }
         }
 
