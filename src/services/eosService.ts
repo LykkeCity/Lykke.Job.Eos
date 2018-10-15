@@ -63,12 +63,16 @@ export class EosService {
     async handleActions(): Promise<number> {
         const params = await this.paramsRepository.get();
 
+        await this.log(LogLevel.info, "Params", params);
+
         let nextActionSequence = (params && params.NextActionSequence) || 0;
         let lastIrreversibleBlock = 0;
 
         while (true) {
             const actionResult: ActionsResult = await this.eos.getActions(this.settings.EosJob.HotWalletAccount, nextActionSequence, 0);
             const action = actionResult.actions[0];
+
+            await this.log(LogLevel.info, "Action", actionResult);
 
             lastIrreversibleBlock = actionResult.last_irreversible_block;
 
