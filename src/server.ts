@@ -15,6 +15,8 @@ loadSettings()
         const eos = new EosService(settings, log);
         const koa = new Koa();
 
+        console.log(JSON.stringify(settings));
+
         // error handling middleware
 
         koa.use(async (ctx, next) => {
