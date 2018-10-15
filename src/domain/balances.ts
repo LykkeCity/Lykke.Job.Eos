@@ -67,17 +67,6 @@ export class BalanceRepository extends MongoRepository {
             );
     }
 
-    async update(address: string, assetId: string, operationOrTxId: string, params: { isCancelled: boolean }) {
-        const db = await this.db();
-        const id = `${address}_${assetId}_${operationOrTxId}`;
-        await db.collection(this.balanceCollectionName)
-            .updateOne(
-                { _id: id },
-                { $set: { IsCancelled: params.isCancelled } },
-                { upsert: true }
-            );
-    }
-
     async get(address: string, assetId: string): Promise<BalanceEntity>;
     async get(take: number, continuation?: string): Promise<MongoQueryResult<BalanceEntity>>;
     async get(addressOrTake: string | number, assetIdOrcontinuation?: string): Promise<BalanceEntity | MongoQueryResult<BalanceEntity>> {
@@ -85,7 +74,7 @@ export class BalanceRepository extends MongoRepository {
         if (isString(addressOrTake)) {
             return await db.collection<BalanceEntity>(this.balanceCollectionName)
                 .aggregate([
-                    { $match: { Address: addressOrTake, AssetId: assetIdOrcontinuation, IsCancelled: { $ne: true } } },
+                    { $match: { Address: addressOrTake, AssetId: assetIdOrcontinuation } },
                     { $group: { _id: { Address: "$Address", AssetId: "$AssetId" }, Amount: { $sum: "$Amount" }, AmountInBaseUnit: { $sum: "$AmountInBaseUnit" }, Block: { $max: "$Block" } } },
                 ])
                 .next();
@@ -93,7 +82,7 @@ export class BalanceRepository extends MongoRepository {
             const skip = parseInt(assetIdOrcontinuation) || 0;
             const entities = await db.collection<BalanceEntity>(this.balanceCollectionName)
                 .aggregate([
-                    { $match: { IsCancelled: { $ne: true }, IsObservable: { $eq: true } } },
+                    { $match: { IsObservable: { $eq: true } } },
                     { $group: { _id: { Address: "$Address", AssetId: "$AssetId" }, Amount: { $sum: "$Amount" }, AmountInBaseUnit: { $sum: "$AmountInBaseUnit" }, Block: { $max: "$Block" } } },
                     // { $match: { Amount: { $gt: 0 } } }, // CosmosDB doesn't suppport multiple $match-es in public preview version
                     { $skip: skip },
