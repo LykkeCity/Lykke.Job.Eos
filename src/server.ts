@@ -15,7 +15,9 @@ loadSettings()
         const eos = new EosService(settings, log);
         const koa = new Koa();
 
-        console.log(JSON.stringify(settings));
+        console.log(`HttpEndpoint = ${JSON.stringify(settings.EosJob.Eos.HttpEndpoint)}`);
+        console.log(`HotWalletAccount = ${JSON.stringify(settings.EosJob.HotWalletAccount)}`);
+        console.log(`Interval = ${JSON.stringify(settings.EosJob.Interval)}`);
 
         // error handling middleware
 
