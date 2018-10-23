@@ -1,4 +1,4 @@
-import { Settings, ADDRESS_SEPARATOR, isoUTC } from "../common";
+import { Settings, ADDRESS_SEPARATOR, isoUTC, isUuid } from "../common";
 import { LogService, LogLevel } from "./logService";
 import { AssetRepository } from "../domain/assets";
 import { OperationRepository, ErrorCode } from "../domain/operations";
@@ -128,7 +128,7 @@ export class EosService {
                         if (!!asset) {
                             const assetId = asset.AssetId;
                             const valueInBaseUnit = asset.toBaseUnit(value);
-                            const to = !!transfer.memo
+                            const to = !!transfer.memo && isUuid(transfer.memo) // check if destination is deposit wallet
                                 ? transfer.to + ADDRESS_SEPARATOR + transfer.memo
                                 : transfer.to;
 
