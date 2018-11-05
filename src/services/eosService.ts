@@ -89,6 +89,8 @@ export class EosService {
                     const operationId = await this.operationRepository.getOperationIdByTxId(txId);
                     if (!!operationId) {
 
+                        await this.log(LogLevel.info, "Operation detected", operationId);
+
                         // this is our operation, so use our data 
                         // to record balance changes and history
 
@@ -115,6 +117,8 @@ export class EosService {
 
                         // set operation state to completed
                         await this.operationRepository.update(operationId, { completionTime: new Date(), blockTime, block });
+
+                        await this.log(LogLevel.info, "Operation recorded", operationId);
                     } else {
 
                         // this is external transaction, so use blockchain 
