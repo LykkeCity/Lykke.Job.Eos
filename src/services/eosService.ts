@@ -103,9 +103,9 @@ export class EosService {
                             ];
                             for (const bc of balanceChanges) {
                                 await this.balanceRepository.upsert(bc.address, operation.AssetId, operationId, bc.affix, bc.affixInBaseUnit, block);
-                                await this.log(LogLevel.info, "Balance change recorded", {
-                                    ...bc, assetId: operation.AssetId, txId
-                                });
+                                // await this.log(LogLevel.info, "Balance change recorded", {
+                                //     ...bc, assetId: operation.AssetId, txId
+                                // });
                             }
 
                             // upsert history of operation action
