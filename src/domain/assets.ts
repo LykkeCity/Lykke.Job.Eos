@@ -31,7 +31,7 @@ export class AssetEntity extends AzureEntity {
     }
 
     toBaseUnit(value: number): number {
-        return value * Math.pow(10, this.Accuracy);
+        return Math.round(value * Math.pow(10, this.Accuracy));
     }
 }
 
