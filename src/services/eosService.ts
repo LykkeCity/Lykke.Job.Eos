@@ -95,28 +95,26 @@ export class EosService {
                         const operationActions = await this.operationRepository.getActions(operationId);
                         const operation = await this.operationRepository.get(operationId);
 
-                        if (!operation.isCompleted()) {
-                            for (const action of operationActions) {
-                                // record balance changes
-                                const balanceChanges = [
-                                    { address: action.FromAddress, affix: -action.Amount, affixInBaseUnit: -action.AmountInBaseUnit },
-                                    { address: action.ToAddress, affix: action.Amount, affixInBaseUnit: action.AmountInBaseUnit }
-                                ];
-                                for (const bc of balanceChanges) {
-                                    await this.balanceRepository.upsert(bc.address, operation.AssetId, operationId, bc.affix, bc.affixInBaseUnit, block);
-                                    await this.log(LogLevel.info, "Balance change recorded", {
-                                        ...bc, assetId: operation.AssetId, txId
-                                    });
-                                }
-
-                                // upsert history of operation action
-                                await this.historyRepository.upsert(action.FromAddress, action.ToAddress, operation.AssetId, action.Amount, action.AmountInBaseUnit,
-                                    block, blockTime, txId, action.RowKey, operationId);
+                        for (const action of operationActions) {
+                            // record balance changes
+                            const balanceChanges = [
+                                { address: action.FromAddress, affix: -action.Amount, affixInBaseUnit: -action.AmountInBaseUnit },
+                                { address: action.ToAddress, affix: action.Amount, affixInBaseUnit: action.AmountInBaseUnit }
+                            ];
+                            for (const bc of balanceChanges) {
+                                await this.balanceRepository.upsert(bc.address, operation.AssetId, operationId, bc.affix, bc.affixInBaseUnit, block);
+                                await this.log(LogLevel.info, "Balance change recorded", {
+                                    ...bc, assetId: operation.AssetId, txId
+                                });
                             }
 
-                            // set operation state to completed
-                            await this.operationRepository.update(operationId, { completionTime: new Date(), blockTime, block });
+                            // upsert history of operation action
+                            await this.historyRepository.upsert(action.FromAddress, action.ToAddress, operation.AssetId, action.Amount, action.AmountInBaseUnit,
+                                block, blockTime, txId, action.RowKey, operationId);
                         }
+
+                        // set operation state to completed
+                        await this.operationRepository.update(operationId, { completionTime: new Date(), blockTime, block });
                     } else {
 
                         // this is external transaction, so use blockchain 
