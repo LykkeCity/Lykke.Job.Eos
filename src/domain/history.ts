@@ -46,7 +46,7 @@ export class HistoryRepository extends AzureRepository {
     }
 
     async upsert(from: string, to: string, assetId: string, amount: number, amountInBaseUnit: number,
-        block: number, blockTime: Date, txId: string, actionId: string, operationId?: string) {
+        block: number, blockTime: Date, txId: string, actionId: string, operationId?: string, legacyActionId?: string) {
 
         const historyByTxIdEntity = new HistoryByTxIdEntity();
         historyByTxIdEntity.PartitionKey = txId;
@@ -74,6 +74,14 @@ export class HistoryRepository extends AzureRepository {
         historyEntity.PartitionKey = `${HistoryAddressCategory.To}_${to}`;
 
         await this.insertOrMerge(this.historyTableName, historyEntity);
+
+        // delete records with wrong legacy action ID, if any
+        if (!!legacyActionId && legacyActionId != actionId)
+        {
+            const legacyRowKey = `${block}_${txId}_${legacyActionId}`;
+            await this.delete(this.historyTableName, `${HistoryAddressCategory.From}_${from}`, legacyRowKey);
+            await this.delete(this.historyTableName, `${HistoryAddressCategory.To}_${to}`, legacyRowKey);
+        }
     }
 
     async get(category: HistoryAddressCategory, address: string, take = 100, afterHash: string = null): Promise<HistoryEntity[]> {
