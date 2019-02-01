@@ -75,8 +75,8 @@ export class HistoryRepository extends AzureRepository {
 
         await this.insertOrMerge(this.historyTableName, historyEntity);
 
-        // delete records without wrong action ID, if any
-        if (!!legacyActionId)
+        // delete records with wrong legacy action ID, if any
+        if (!!legacyActionId && legacyActionId != actionId)
         {
             const legacyRowKey = `${block}_${txId}_${legacyActionId}`;
             await this.delete(this.historyTableName, `${HistoryAddressCategory.From}_${from}`, legacyRowKey);

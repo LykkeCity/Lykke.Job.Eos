@@ -87,6 +87,13 @@ export class EosService {
                     const block = action.block_num * 10;
                     const blockTime = isoUTC(action.block_time);
                     const txId = action.action_trace.trx_id;
+
+                    // act_digest is identical for identical actions;
+                    // if such actions are added to the same transaction
+                    // then we can not distinguish them by digest,
+                    // so use global action sequence number as action ID,
+                    // on re-processing history transparently megrate
+                    // old records to new format
                     const actionId = action.action_trace.receipt.global_sequence.toFixed();
                     const legacyActionId = action.action_trace.receipt.act_digest;
 
