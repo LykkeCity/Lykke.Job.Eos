@@ -178,7 +178,7 @@ export class EosService {
                         await this.log(LogLevel.warning, "Not a transfer", action.action_trace.act.name);
                     }
                 } else {
-                    await this.log(LogLevel.warning, "Not tracked receipt receiver", action.action_trace.receipt.receiver);
+                    await this.log(LogLevel.info, "Not tracked receipt receiver", action.action_trace.receipt.receiver);
                 }
 
                 // increment counter to fetch next action
