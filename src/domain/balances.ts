@@ -55,14 +55,20 @@ export class BalanceRepository extends MongoRepository {
             );
     }
 
-    async upsert(address: string, assetId: string, operationOrTxId: string, amount: number, amountInBaseUnit: number, block: number) {
+    async upsert(address: string, assetId: string, operationOrTxId: string, actionId: string, amount: number, amountInBaseUnit: number, block: number) {
         const db = await this.db();
-        const id = `${address}_${assetId}_${operationOrTxId}`;
+        const legacyId = `${address}_${assetId}_${operationOrTxId}`;
+        const id = `${address}_${assetId}_${operationOrTxId}_${actionId}`;
         const isObservable = await this.isObservable(address);
+
+        // delete record without action ID, if any
+        await db.collection(this.balanceCollectionName).deleteOne({ _id: legacyId });
+
+        // upsert actual record
         await db.collection(this.balanceCollectionName)
             .updateOne(
                 { _id: id },
-                { $set: { _id: id, Address: address, AssetId: assetId, OperationOrTxId: operationOrTxId, Amount: amount, AmountInBaseUnit: amountInBaseUnit, Block: block, IsObservable: isObservable } },
+                { $set: { _id: id, Address: address, AssetId: assetId, OperationOrTxId: operationOrTxId, ActionId: actionId, Amount: amount, AmountInBaseUnit: amountInBaseUnit, Block: block, IsObservable: isObservable } },
                 { upsert: true }
             );
     }
