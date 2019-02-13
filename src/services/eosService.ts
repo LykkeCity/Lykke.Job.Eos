@@ -5,6 +5,7 @@ import { OperationRepository, ErrorCode } from "../domain/operations";
 import { ParamsRepository, ParamsEntity } from "../domain/params";
 import { BalanceRepository } from "../domain/balances";
 import { HistoryRepository } from "../domain/history";
+import { isNumber } from "util";
 
 export interface ActionsResult {
     actions: {
@@ -23,7 +24,7 @@ export interface ActionsResult {
             receipt: {
                 receiver: string;
                 act_digest: string;
-                global_sequence: number;
+                global_sequence: number | string;
             };
             trx_id: string;
         };
@@ -94,7 +95,9 @@ export class EosService {
                     // so use global action sequence number as action ID,
                     // on re-processing history transparently megrate
                     // old records to new format
-                    const actionId = action.action_trace.receipt.global_sequence.toFixed();
+                    const actionId = isNumber(action.action_trace.receipt.global_sequence)
+                        ? action.action_trace.receipt.global_sequence.toFixed()
+                        : action.action_trace.receipt.global_sequence;
                     const legacyActionId = action.action_trace.receipt.act_digest;
 
                     if (!!transfer) {
