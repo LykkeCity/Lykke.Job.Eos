@@ -5,7 +5,7 @@ import { OperationRepository, ErrorCode } from "../domain/operations";
 import { ParamsRepository, ParamsEntity } from "../domain/params";
 import { BalanceRepository } from "../domain/balances";
 import { HistoryRepository } from "../domain/history";
-import { isNumber } from "util";
+import { isNumber, isObject } from "util";
 
 export interface ActionsResult {
     actions: {
@@ -84,7 +84,7 @@ export class EosService {
 
                 if (action.action_trace.receipt.receiver == this.settings.EosJob.HotWalletAccount) {
 
-                    const transfer = action.action_trace.act.name == "transfer" && action.action_trace.act.data;
+                    const transfer = action.action_trace.act.name == "transfer" && isObject(action.action_trace.act.data) && action.action_trace.act.data;
                     const block = action.block_num * 10;
                     const blockTime = isoUTC(action.block_time);
                     const txId = action.action_trace.trx_id;
