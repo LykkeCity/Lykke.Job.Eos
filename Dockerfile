@@ -4,7 +4,7 @@ ARG version=1.0.0
 WORKDIR /usr/src/eos-job
 COPY . .
 RUN npm version ${version}
-RUN npm install typescript -g
+RUN npm install typescript@3.7.5 -g
 RUN npm install --production --silent
 RUN tsc
 EXPOSE 5000

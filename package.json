@@ -12,14 +12,15 @@
     "@types/applicationinsights": "^0.20.0",
     "@types/koa": "^2.0.46",
     "@types/mongodb": "^3.1.1",
-    "@types/node": "^10.5.1",
-    "applicationinsights": "^1.0.4",
-    "axios": "^0.18.0",
-    "azure-storage": "^2.10.0",
-    "eosjs": "^16.0.0",
+    "@types/node": "^10.17.13",
+    "applicationinsights": "^1.0.7",
+    "axios": "^0.18.1",
+    "azure-storage": "^2.10.3",
+    "eosjs": "^16.0.8",
     "interval-promise": "^1.2.0",
     "koa": "^2.5.1",
-    "mongodb": "^3.1.0",
-    "reflect-metadata": "^0.1.12"
+    "mongodb": "^3.1.13",
+    "reflect-metadata": "^0.1.12",
+    "save": "^2.4.0"
   }
 }
