@@ -1,4 +1,4 @@
-FROM node:8-alpine
+FROM node:8-buster-slim
 ENV NODE_ENV production
 ARG version=1.0.0
 WORKDIR /usr/src/eos-job
