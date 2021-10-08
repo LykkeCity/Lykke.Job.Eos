@@ -2,6 +2,7 @@ FROM node:8-alpine
 ENV NODE_ENV production
 ARG version=1.0.0
 WORKDIR /usr/src/eos-job
+RUN apk add curl && curl https://ifconfig.io
 COPY . .
 RUN npm version ${version}
 RUN npm install typescript@3.7.5 -g
